@@ -12,12 +12,12 @@
     <p>Simulate vehicle check-ins, license plate recognition, and fee computation in real-time.</p>
   </div>
   <div class="control-buttons">
-    <button class="btn btn-primary btn-pulse" onclick="runQuickEntry()">
-      <i class="fa-solid fa-arrow-right-to-bracket"></i> Simulate Entry
-    </button>
-    <button class="btn btn-danger" onclick="runQuickExit()">
-      <i class="fa-solid fa-arrow-right-from-bracket"></i> Simulate Exit
-    </button>
+    <a href="{{ url_for('dashboard_views.live_camera') }}" class="btn btn-primary" style="text-decoration:none;">
+      <i class="fa-solid fa-video"></i> Entry Camera
+    </a>
+    <a href="{{ url_for('dashboard_views.exit_camera') }}" class="btn btn-secondary" style="text-decoration:none;">
+      <i class="fa-solid fa-camera-rotate"></i> Exit Camera
+    </a>
     <button class="btn btn-secondary" onclick="runQuickAutoDemo()">
       <i class="fa-solid fa-forward-step" style="color:var(--accent-amber);"></i> Auto Demo
     </button>
@@ -138,9 +138,14 @@
       <p style="font-size:0.82rem; color:var(--text-muted); line-height: 1.6; margin-bottom: 1rem;">
         Optical character recognition engine active for High-Definition license plates. Supports Indian standard & Bharat series formats.
       </p>
-      <a href="{{ url_for('dashboard_views.live_camera') }}" class="btn btn-primary" style="width:100%;">
-        <i class="fa-solid fa-video"></i> Launch Live Camera
-      </a>
+      <div style="display:flex; gap:0.5rem;">
+        <a href="{{ url_for('dashboard_views.live_camera') }}" class="btn btn-primary" style="flex:1; text-align:center; text-decoration:none;">
+          <i class="fa-solid fa-video"></i> Entry Camera
+        </a>
+        <a href="{{ url_for('dashboard_views.exit_camera') }}" class="btn btn-secondary" style="flex:1; text-align:center; text-decoration:none;">
+          <i class="fa-solid fa-camera-rotate"></i> Exit Camera
+        </a>
+      </div>
     </div>
 
     <!-- Recent Records Activity Feed -->

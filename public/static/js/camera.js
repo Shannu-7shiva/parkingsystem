@@ -5,6 +5,56 @@ let webcamStream = null;
 let currentUploadedFile = null;
 let selectedVehicleTypePref = 'auto';
 
+// Client-side AI OCR Engine (Tesseract.js WebAssembly - Google OCR)
+let clientOcrWorker = null;
+let clientOcrReady = false;
+
+async function initClientOCR() {
+  if (typeof Tesseract === 'undefined' || clientOcrReady) return;
+  try {
+    clientOcrWorker = await Tesseract.createWorker('eng');
+    await clientOcrWorker.setParameters({
+      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
+      tessedit_pageseg_mode: '7'
+    });
+    clientOcrReady = true;
+    console.log('AI Client OCR (Tesseract.js) initialized.');
+  } catch (e) {
+    console.warn('Client OCR setup:', e);
+  }
+}
+
+async function runClientSideOCR(canvas) {
+  if (!clientOcrReady || !clientOcrWorker) return null;
+  try {
+    const cw = canvas.width;
+    const ch = canvas.height;
+    // Scan central region where plates are shown
+    const cropX = Math.round(cw * 0.10);
+    const cropY = Math.round(ch * 0.15);
+    const cropW = Math.round(cw * 0.80);
+    const cropH = Math.round(ch * 0.70);
+
+    const scanCanvas = document.createElement('canvas');
+    scanCanvas.width = cropW;
+    scanCanvas.height = cropH;
+    const sctx = scanCanvas.getContext('2d');
+    sctx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+    const ret = await clientOcrWorker.recognize(scanCanvas);
+    if (ret && ret.data && ret.data.text) {
+      const raw = ret.data.text.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      // Match Indian standard plate patterns (e.g., AP39CJ5337, TG03A7349, TN09AB1234)
+      const m = raw.match(/[A-Z]{2}\d{1,2}[A-Z]{0,3}\d{3,4}/);
+      if (m) return m[0];
+      if (raw.length >= 7 && /\d{3,4}$/.test(raw)) return raw;
+    }
+  } catch (err) {
+    console.debug('Client OCR pass:', err);
+  }
+  return null;
+}
+
 function setVehicleTypePref(type) {
   selectedVehicleTypePref = type;
   document.querySelectorAll('.btn-vtype').forEach(btn => {
@@ -120,6 +170,11 @@ async function captureAndProcessFrame() {
     formData.append('file', blob, 'webcam_capture.jpg');
     if (selectedVehicleTypePref && selectedVehicleTypePref !== 'auto') {
       formData.append('vehicle_type', selectedVehicleTypePref);
+    }
+
+    const clientPlate = await runClientSideOCR(canvas);
+    if (clientPlate) {
+      formData.append('plate_text', clientPlate);
     }
 
     showToast('Processing frame through ANPR pipeline...', 'info');
@@ -414,6 +469,11 @@ async function captureAndProcessFrameSilent() {
       formData.append('vehicle_type', selectedVehicleTypePref);
     }
 
+    const clientPlate = await runClientSideOCR(canvas);
+    if (clientPlate) {
+      formData.append('plate_text', clientPlate);
+    }
+
     try {
       const t0 = Date.now();
       const res = await fetch('/api/anpr/process', { method: 'POST', body: formData });
@@ -447,5 +507,6 @@ async function captureAndProcessFrameSilent() {
 
 // Start webcam and auto-scan when page loads
 document.addEventListener('DOMContentLoaded', () => {
+  initClientOCR();
   startWebcam().then(() => startAutoScan());
 });

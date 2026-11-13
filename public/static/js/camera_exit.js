@@ -9,6 +9,54 @@ let exitAutoScanPaused = false;
 let exitIsProcessingFrame = false;
 let selectedExitVehicleTypePref = 'auto';
 
+// Client-side AI OCR Engine (Tesseract.js WebAssembly - Google OCR)
+let exitOcrWorker = null;
+let exitOcrReady = false;
+
+async function initExitClientOCR() {
+  if (typeof Tesseract === 'undefined' || exitOcrReady) return;
+  try {
+    exitOcrWorker = await Tesseract.createWorker('eng');
+    await exitOcrWorker.setParameters({
+      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
+      tessedit_pageseg_mode: '7'
+    });
+    exitOcrReady = true;
+    console.log('AI Client Exit OCR (Tesseract.js) initialized.');
+  } catch (e) {
+    console.warn('Exit Client OCR setup:', e);
+  }
+}
+
+async function runExitClientSideOCR(canvas) {
+  if (!exitOcrReady || !exitOcrWorker) return null;
+  try {
+    const cw = canvas.width;
+    const ch = canvas.height;
+    const cropX = Math.round(cw * 0.10);
+    const cropY = Math.round(ch * 0.15);
+    const cropW = Math.round(cw * 0.80);
+    const cropH = Math.round(ch * 0.70);
+
+    const scanCanvas = document.createElement('canvas');
+    scanCanvas.width = cropW;
+    scanCanvas.height = cropH;
+    const sctx = scanCanvas.getContext('2d');
+    sctx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+    const ret = await exitOcrWorker.recognize(scanCanvas);
+    if (ret && ret.data && ret.data.text) {
+      const raw = ret.data.text.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      const m = raw.match(/[A-Z]{2}\d{1,2}[A-Z]{0,3}\d{3,4}/);
+      if (m) return m[0];
+      if (raw.length >= 7 && /\d{3,4}$/.test(raw)) return raw;
+    }
+  } catch (err) {
+    console.debug('Exit client OCR pass:', err);
+  }
+  return null;
+}
+
 function setExitVehicleTypePref(type) {
   selectedExitVehicleTypePref = type;
   document.querySelectorAll('.btn-exit-vtype').forEach(btn => {
@@ -122,6 +170,11 @@ async function exitCaptureSilent() {
     fd.append('force_action', 'EXIT');
     if (selectedExitVehicleTypePref && selectedExitVehicleTypePref !== 'auto') {
       fd.append('vehicle_type', selectedExitVehicleTypePref);
+    }
+
+    const clientPlate = await runExitClientSideOCR(canvas);
+    if (clientPlate) {
+      fd.append('plate_text', clientPlate);
     }
 
     try {
@@ -444,6 +497,7 @@ function renderExitBill(data) {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+  initExitClientOCR();
   exitStartWebcam();
 });
 
