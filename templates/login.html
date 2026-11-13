@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login | Smart Parking ANPR System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top center, #111d33 0%, #060911 100%);
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+    .login-wrapper {
+      width: 100%;
+      max-width: 440px;
+    }
+    .login-card {
+      background: rgba(17, 24, 39, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: var(--radius-lg);
+      padding: 2.5rem 2rem;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(20px);
+    }
+    .brand-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .brand-logo {
+      width: 58px;
+      height: 58px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.75rem;
+      color: #050b14;
+      margin-bottom: 1rem;
+      box-shadow: 0 0 25px rgba(0, 240, 255, 0.4);
+    }
+    .demo-creds-box {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .demo-pill {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--accent-cyan);
+      font-family: monospace;
+      margin: 2px;
+      display: inline-block;
+      transition: var(--transition);
+    }
+    .demo-pill:hover {
+      background: var(--accent-cyan);
+      color: #050b14;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-wrapper">
+    <div class="login-card">
+      <div class="brand-header">
+        <div class="brand-logo">
+          <i class="fa-solid fa-square-parking"></i>
+        </div>
+        <h2 style="font-size:1.5rem; font-weight:800; color:#ffffff;">ParkVision ANPR</h2>
+        <p style="color:var(--text-muted); font-size:0.85rem; margin-top:0.35rem;">Smart Parking Management System</p>
+      </div>
+
+      <!-- Flash messages -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }}" style="font-size:0.85rem; padding:0.75rem 1rem;">
+              <span>{{ message }}</span>
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST" action="{{ url_for('auth.login', next=request.args.get('next')) }}">
+        <div class="form-group">
+          <label class="form-label" for="username">
+            <i class="fa-solid fa-user" style="margin-right:6px; color:var(--accent-cyan);"></i> Username
+          </label>
+          <input type="text" id="username" name="username" class="form-control" placeholder="Enter username" required autofocus autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">
+            <i class="fa-solid fa-lock" style="margin-right:6px; color:var(--accent-cyan);"></i> Password
+          </label>
+          <input type="password" id="password" name="password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width:100%; padding:0.85rem; font-size:0.95rem; margin-top:0.75rem;">
+          <i class="fa-solid fa-arrow-right-to-bracket"></i> Sign In to Terminal
+        </button>
+      </form>
+
+      <div class="demo-creds-box">
+        <div style="font-weight:700; color:#ffffff; margin-bottom:0.4rem; display:flex; align-items:center; gap:6px;">
+          <i class="fa-solid fa-key" style="color:var(--accent-amber);"></i> Quick Demo Credentials:
+        </div>
+        <div>Admin: <span class="demo-pill" onclick="fillCreds('admin', 'admin123')">admin / admin123</span></div>
+        <div style="margin-top:4px;">Operator: <span class="demo-pill" onclick="fillCreds('operator', 'operator123')">operator / operator123</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function fillCreds(u, p) {
+      document.getElementById('username').value = u;
+      document.getElementById('password').value = p;
+    }
+  </script>
+</body>
+</html>

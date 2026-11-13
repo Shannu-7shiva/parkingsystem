@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block title %}Live ANPR Camera | Smart Parking System{% endblock %}
+{% block page_title %}Live Automatic Number Plate Recognition{% endblock %}
+{% block page_subtitle %}Real-time Computer Vision Pipeline: Vehicle Detection, Plate Cropping, and OCR Extraction{% endblock %}
+
+{% block content %}
+<div style="display:grid; grid-template-columns: 1fr 390px; gap: 1.5rem;">
+  
+  <!-- Left Column: Video Feeds & Controls -->
+  <div style="display:flex; flex-direction:column; gap:1.25rem;">
+    
+    <!-- Mode Selection Toolbar -->
+    <div class="card" style="padding: 1rem 1.5rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem;">
+      <div style="display:flex; align-items:center; gap:0.5rem;">
+        <span style="font-size:0.85rem; font-weight:700; color:var(--text-sub); text-transform:uppercase;">Input Mode:</span>
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn btn-sm btn-primary" id="btnModeWebcam" onclick="switchMode('webcam')">
+            <i class="fa-solid fa-camera"></i> Webcam
+          </button>
+          <button class="btn btn-sm btn-secondary" id="btnModeUpload" onclick="switchMode('upload')">
+            <i class="fa-solid fa-upload"></i> Upload Media
+          </button>
+          <button class="btn btn-sm btn-secondary" id="btnModeSim" onclick="switchMode('simulation')">
+            <i class="fa-solid fa-microchip"></i> Simulation Feed
+          </button>
+        </div>
+      </div>
+
+      <!-- Vehicle Classification Selector -->
+      <div style="display:flex; align-items:center; gap:0.4rem;">
+        <span style="font-size:0.8rem; font-weight:700; color:var(--text-sub); text-transform:uppercase;">Vehicle:</span>
+        <div id="vtypeGroup" style="display:inline-flex; background:#070b16; border:1px solid #1e293b; border-radius:6px; padding:2px; gap:2px;">
+          <button type="button" class="btn-vtype active" data-vtype="auto" onclick="setVehicleTypePref('auto')" style="padding:4px 9px; font-size:0.75rem; border-radius:4px; border:none; background:#0284c7; color:#fff; cursor:pointer; font-weight:600;">⚡ Auto-Detect</button>
+          <button type="button" class="btn-vtype" data-vtype="motorcycle" onclick="setVehicleTypePref('motorcycle')" style="padding:4px 9px; font-size:0.75rem; border-radius:4px; border:none; background:transparent; color:#94a3b8; cursor:pointer; font-weight:600;">🏍️ Bike</button>
+          <button type="button" class="btn-vtype" data-vtype="car" onclick="setVehicleTypePref('car')" style="padding:4px 9px; font-size:0.75rem; border-radius:4px; border:none; background:transparent; color:#94a3b8; cursor:pointer; font-weight:600;">🚗 Car</button>
+          <button type="button" class="btn-vtype" data-vtype="auto_rickshaw" onclick="setVehicleTypePref('auto')" style="padding:4px 9px; font-size:0.75rem; border-radius:4px; border:none; background:transparent; color:#94a3b8; cursor:pointer; font-weight:600;">🛺 Auto</button>
+          <button type="button" class="btn-vtype" data-vtype="bus" onclick="setVehicleTypePref('bus')" style="padding:4px 9px; font-size:0.75rem; border-radius:4px; border:none; background:transparent; color:#94a3b8; cursor:pointer; font-weight:600;">🚌 Bus</button>
+        </div>
+      </div>
+
+      <!-- Mode Label (Requirement 37) -->
+      <div id="modeStatusIndicator">
+        <span class="badge badge-ev" id="modeBadge">REAL ANPR: WEBCAM</span>
+      </div>
+    </div>
+
+    <!-- Real-time Boom Barrier Gate HUD -->
+    <div class="card" style="padding: 0.85rem 1.5rem; display:flex; align-items:center; justify-content:space-between; background:#0d1525; border-color:var(--border-color); flex-wrap:wrap; gap:1rem;">
+      <div style="display:flex; align-items:center; gap:1.25rem;">
+        <!-- Visual Animated Boom Barrier -->
+        <div style="display:flex; align-items:flex-end; height:34px; width:125px; position:relative; overflow:visible;">
+          <!-- Post -->
+          <div style="width:14px; height:28px; background:#334155; border:1px solid #475569; border-radius:3px; position:relative; z-index:2;">
+            <div id="barrierLight" style="width:8px; height:8px; border-radius:50%; background:#ef4444; margin:3px auto 0 auto; box-shadow:0 0 6px #ef4444; transition:all 0.3s ease;"></div>
+          </div>
+          <!-- Boom Arm -->
+          <div id="barrierArm" style="width:85px; height:6px; background:repeating-linear-gradient(90deg, #ef4444, #ef4444 10px, #ffffff 10px, #ffffff 20px); border-radius:3px; transform-origin:left bottom; transform:rotate(0deg); transition:transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); position:absolute; left:12px; bottom:6px; z-index:1;"></div>
+        </div>
+        <div>
+          <div style="font-size:0.7rem; color:var(--text-sub); text-transform:uppercase; font-weight:700;">Automatic Barrier Gate</div>
+          <div id="barrierStatusText" style="font-weight:800; font-size:0.92rem; color:#ef4444;"><i class="fa-solid fa-lock"></i> BARRIER CLOSED</div>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:1.25rem;">
+        <div style="font-size:0.8rem; color:var(--text-muted);">
+          <i class="fa-solid fa-bolt" style="color:var(--accent-cyan);"></i> Fastag RFID: <strong style="color:var(--accent-green);">ONLINE</strong>
+        </div>
+        <div style="font-size:0.8rem; color:var(--text-muted);">
+          <i class="fa-solid fa-stopwatch" style="color:var(--accent-amber);"></i> Latency: <strong id="latencyDisplay" style="color:var(--text-main);">-- ms</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Camera Viewport Card -->
+    <div class="card" style="position:relative; overflow:hidden; min-height:480px; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#080d17;">
+      
+      <!-- Webcam Video Container -->
+      <div id="webcamContainer" style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative;">
+        <video id="webcamElement" autoplay playsinline muted style="width:100%; max-height:460px; object-fit:contain; border-radius:8px;"></video>
+        <canvas id="captureCanvas" style="display:none;"></canvas>
+
+        <!-- Live AI Full-View Scanner HUD Overlay -->
+        <div id="aiScanOverlay" style="position:absolute; inset:0; pointer-events:none; overflow:hidden; border-radius:8px;">
+          <div class="scanner-line"></div>
+          <div class="scanner-corners"></div>
+          <div style="position:absolute; top:12px; left:12px; background:rgba(6, 8, 16, 0.85); border:1px solid rgba(56, 189, 248, 0.4); border-radius:6px; padding:4px 10px; font-size:0.75rem; color:#38bdf8; display:flex; align-items:center; gap:6px; backdrop-filter:blur(4px);">
+            <span style="width:8px; height:8px; border-radius:50%; background:#22c55e; box-shadow:0 0 8px #22c55e; animation:pulse 1.5s infinite;"></span>
+            <span>AI FULL-VIEW SCANNER: <strong>ACTIVE</strong></span>
+          </div>
+          <div style="position:absolute; bottom:14px; background:rgba(6, 8, 16, 0.75); border-radius:6px; padding:4px 12px; font-size:0.75rem; color:#94a3b8;">
+            <i class="fa-solid fa-camera"></i> Show vehicle or license plate to camera – Automatic entry & slot allocation
+          </div>
+        </div>
+
+        <!-- Webcam error alert fallback -->
+        <div id="webcamErrorAlert" style="display:none; position:absolute; top:20px; left:20px; right:20px; background:rgba(239, 68, 68, 0.9); padding:1rem; border-radius:8px; color:#fff; font-size:0.85rem; text-align:center;">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <strong>Camera Unavailable:</strong> Laptop webcam not detected or permission denied. Please use <strong>Upload Media</strong> or <strong>Simulation Feed</strong> mode.
+        </div>
+
+        <div style="margin-top:1rem; display:flex; gap:0.75rem;">
+          <button class="btn btn-primary" id="btnCaptureFrame" onclick="captureAndProcessFrame()">
+            <i class="fa-solid fa-crosshairs"></i> Capture & Process Plate
+          </button>
+          <button class="btn btn-secondary" onclick="startWebcam()">
+            <i class="fa-solid fa-rotate"></i> Restart Camera
+          </button>
+        </div>
+      </div>
+
+      <!-- File Upload Container -->
+      <div id="uploadContainer" style="display:none; width:100%; padding:2rem; text-align:center;">
+        <div style="border:2px dashed var(--border-color); border-radius:12px; padding:2.5rem 1.5rem; background:rgba(0,0,0,0.2); cursor:pointer;" onclick="document.getElementById('fileInput').click()">
+          <i class="fa-solid fa-cloud-arrow-up" style="font-size:3rem; color:var(--accent-cyan); margin-bottom:1rem;"></i>
+          <h3 style="font-size:1.1rem; font-weight:700;">Click to Upload Vehicle Image or Video Frame</h3>
+          <p style="color:var(--text-muted); font-size:0.85rem; margin-top:0.5rem;">Supports JPG, PNG, WEBP, BMP</p>
+          <input type="file" id="fileInput" accept="image/*" style="display:none;" onchange="handleFileUpload(event)">
+        </div>
+
+        <div id="uploadPreviewBox" style="display:none; margin-top:1.5rem;">
+          <img id="uploadPreviewImg" src="" alt="Upload Preview" style="max-width:100%; max-height:360px; border-radius:8px; border:1px solid var(--border-color);">
+          <div style="margin-top:1rem;">
+            <button class="btn btn-primary" onclick="submitUploadedImage()">
+              <i class="fa-solid fa-brain"></i> Run ANPR Pipeline on Image
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Simulation Container -->
+      <div id="simulationContainer" style="display:none; width:100%; padding:1rem; text-align:center;">
+        <img id="simFramePreview" src="/uploads/vehicles/snap_demo.jpg" onerror="this.src='https://via.placeholder.com/800x480/111827/00f0ff?text=Click+Generate+Virtual+Feed'" alt="Sim Frame" style="width:100%; max-height:420px; object-fit:contain; border-radius:8px; border:1px solid var(--border-color); background:#000;">
+        
+        <div style="margin-top:1.25rem; display:flex; justify-content:center; gap:0.75rem; flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="triggerSimEvent('ENTRY')">
+            <i class="fa-solid fa-car"></i> Simulate Arrival (TN09AB1234)
+          </button>
+          <button class="btn btn-danger" onclick="triggerSimEvent('EXIT')">
+            <i class="fa-solid fa-car-tunnel"></i> Simulate Departure (Exit)
+          </button>
+          <button class="btn btn-secondary" onclick="triggerSimEvent('RANDOM')">
+            <i class="fa-solid fa-shuffle"></i> Random Vehicle
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Right Column: Real-time ANPR Telemetry Card -->
+  <div style="display:flex; flex-direction:column; gap:1.25rem;">
+    
+    <!-- AI Extraction Results Card -->
+    <div class="card" style="background:#131c2d;">
+      <div class="section-header" style="margin-bottom:1rem;">
+        <h2><i class="fa-solid fa-brain" style="color:var(--accent-cyan);"></i> Recognition Output</h2>
+        <span class="badge badge-available" id="statusBadgeAction">READY</span>
+      </div>
+
+      <!-- Plate Crop Preview Box -->
+      <div style="background:rgba(0,0,0,0.4); border:1px solid var(--border-color); border-radius:8px; padding:0.75rem; text-align:center; margin-bottom:1rem;">
+        <div style="font-size:0.72rem; text-transform:uppercase; color:var(--text-sub); margin-bottom:0.4rem;">License Plate Crop (ROI)</div>
+        <img id="plateCropImg" src="" alt="No plate cropped yet" style="max-width:100%; height:55px; object-fit:contain; border-radius:4px; background:#1e293b; display:none;">
+        <div id="plateCropPlaceholder" style="height:55px; display:flex; align-items:center; justify-content:center; color:var(--text-sub); font-size:0.8rem;">
+          <i class="fa-solid fa-image" style="margin-right:6px;"></i> Awaiting Vehicle Frame
+        </div>
+      </div>
+
+      <!-- Plate String Displays -->
+      <div style="margin-bottom:1.25rem;">
+        <div style="font-size:0.75rem; color:var(--text-sub); text-transform:uppercase; margin-bottom:0.3rem;">Normalized Plate:</div>
+        <div id="detectedPlateDisplay" class="plate-badge" style="font-size:1.4rem; padding:8px 16px; width:100%; text-align:center;">
+          -- NO PLATE --
+        </div>
+      </div>
+
+      <div style="background:rgba(0,0,0,0.25); border-radius:8px; padding:1rem; display:flex; flex-direction:column; gap:0.6rem; font-size:0.85rem;">
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:var(--text-muted);">Raw OCR Text:</span>
+          <strong id="rawOcrText" style="font-family:monospace; color:var(--text-main);">--</strong>
+        </div>
+
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:var(--text-muted);">Confidence Score:</span>
+          <strong id="ocrConfidenceText" style="color:var(--accent-green);">0%</strong>
+        </div>
+
+        <!-- Confidence meter bar -->
+        <div style="width:100%; height:6px; background:#1e293b; border-radius:3px; overflow:hidden;">
+          <div id="confidenceBar" style="width:0%; height:100%; background:var(--accent-green); transition:width 0.4s ease;"></div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; margin-top:0.4rem;">
+          <span style="color:var(--text-muted);">Detected Vehicle:</span>
+          <strong id="detectedVehicleType" style="color:var(--accent-cyan);">--</strong>
+        </div>
+
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:var(--text-muted);">Vehicle Model:</span>
+          <strong id="vehicleModelText" style="color:var(--text-main);">--</strong>
+        </div>
+
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:var(--text-muted);">Owner Name:</span>
+          <strong id="ownerNameText" style="color:#38bdf8;">--</strong>
+        </div>
+
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:var(--text-muted);">Assigned Slot:</span>
+          <strong id="assignedSlotText" style="color:var(--accent-green); font-size:1.05rem;">--</strong>
+        </div>
+
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:var(--text-muted);">Pipeline Engine:</span>
+          <strong id="pipelineEngineText" style="font-size:0.75rem; color:var(--text-sub);">YOLO + OCR</strong>
+        </div>
+      </div>
+
+      <!-- Manual Plate Fallback Form -->
+      <div style="margin-top:1.25rem; border-top:1px solid var(--border-color); padding-top:1rem;">
+        <div style="font-size:0.75rem; color:var(--text-sub); text-transform:uppercase; margin-bottom:0.5rem; font-weight:700;">
+          <i class="fa-solid fa-pen-to-square"></i> Manual Override / Fallback Mode:
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+          <input type="text" id="manualPlateInput" class="form-control" placeholder="e.g. TN09AB1234" style="font-family:monospace; font-weight:700; text-transform:uppercase;">
+          <button class="btn btn-sm btn-primary" onclick="submitManualPlateOverride()">
+            Apply
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/camera.js') }}"></script>
+{% endblock %}

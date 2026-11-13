@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Smart Parking ANPR System{% endblock %}</title>
+  
+  <!-- Modern Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/parking.css') }}">
+  
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-badge">
+          <i class="fa-solid fa-square-parking"></i>
+        </div>
+        <div class="logo-text">
+          <h2>ParkVision ANPR</h2>
+          <span>AI Vision Terminal</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="{{ url_for('dashboard_views.dashboard') }}" class="nav-link {% if request.path == '/dashboard' or request.path == '/' %}active{% endif %}">
+          <i class="fa-solid fa-gauge-high"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="{{ url_for('dashboard_views.live_camera') }}" class="nav-link {% if request.path == '/live-camera' %}active{% endif %}">
+          <i class="fa-solid fa-camera-web"></i>
+          <span>Entry Camera</span>
+        </a>
+        <a href="{{ url_for('dashboard_views.exit_camera') }}" class="nav-link {% if request.path == '/exit-camera' %}active{% endif %}">
+          <i class="fa-solid fa-camera-rotate"></i>
+          <span>Exit Camera</span>
+        </a>
+        <a href="{{ url_for('dashboard_views.parking_lot') }}" class="nav-link {% if request.path == '/parking-lot' %}active{% endif %}">
+          <i class="fa-solid fa-map-location-dot"></i>
+          <span>Parking Map</span>
+        </a>
+        <a href="{{ url_for('vehicles_views.vehicles') }}" class="nav-link {% if request.path.startswith('/vehicles') %}active{% endif %}">
+          <i class="fa-solid fa-car-side"></i>
+          <span>Vehicles</span>
+        </a>
+        <a href="{{ url_for('vehicles_views.parking_history') }}" class="nav-link {% if request.path == '/parking-history' %}active{% endif %}">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          <span>Parking History</span>
+        </a>
+        <a href="{{ url_for('analytics_views.analytics') }}" class="nav-link {% if request.path == '/analytics' %}active{% endif %}">
+          <i class="fa-solid fa-chart-line"></i>
+          <span>Analytics</span>
+        </a>
+        <a href="{{ url_for('vehicles_views.blacklist') }}" class="nav-link {% if request.path == '/blacklist' %}active{% endif %}">
+          <i class="fa-solid fa-shield-halved"></i>
+          <span>Blacklist</span>
+        </a>
+        <a href="{{ url_for('vehicles_views.settings') }}" class="nav-link {% if request.path == '/settings' %}active{% endif %}">
+          <i class="fa-solid fa-sliders"></i>
+          <span>Settings</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-profile">
+          <div class="user-info">
+            <div class="user-avatar">
+              <i class="fa-solid fa-user-shield"></i>
+            </div>
+            <div class="user-details">
+              <h4>{{ session.get('username', 'Admin') | capitalize }}</h4>
+              <span><i class="fa-solid fa-circle" style="font-size: 6px;"></i> Active Session</span>
+            </div>
+          </div>
+          <a href="{{ url_for('auth.logout') }}" class="btn-logout" title="Sign Out">
+            <i class="fa-solid fa-right-from-bracket"></i>
+          </a>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <header class="top-navbar">
+        <div class="page-title">
+          <h1>{% block page_title %}Smart Parking Dashboard{% endblock %}</h1>
+          <p>{% block page_subtitle %}Real-time ANPR Monitoring and Slot Control{% endblock %}</p>
+        </div>
+
+        <div class="navbar-actions">
+          <div class="live-indicator">
+            <span class="pulse-dot"></span>
+            <span>SYSTEM ONLINE</span>
+          </div>
+
+          <div class="system-clock" id="systemClock">
+            --:--:--
+          </div>
+
+          <button class="btn btn-sm btn-primary" onclick="triggerQuickSimulateModal()">
+            <i class="fa-solid fa-play"></i> Simulate
+          </button>
+        </div>
+      </header>
+
+      <div class="page-body">
+        <!-- Flash messages -->
+        <div class="flash-container">
+          {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+              {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                  <span>{{ message }}</span>
+                  <button type="button" class="btn-close" onclick="this.parentElement.remove()" style="background:none;border:none;color:inherit;cursor:pointer;">&times;</button>
+                </div>
+              {% endfor %}
+            {% endif %}
+          {% endwith %}
+        </div>
+
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+
+  <!-- Quick Simulation Modal -->
+  <div class="modal-overlay" id="quickSimModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-bolt" style="color:var(--accent-cyan);"></i> Virtual Simulator</h3>
+        <button class="modal-close" onclick="closeQuickSimModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom: 1.25rem;">
+          Run software-only simulation of vehicle arrivals and departures. No webcam or physical cars required!
+        </p>
+
+        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+          <button class="btn btn-primary" style="justify-content:flex-start; padding:0.85rem;" onclick="runQuickEntry()">
+            <i class="fa-solid fa-arrow-right-to-bracket" style="font-size:1.1rem;"></i>
+            <div style="text-align:left;">
+              <div style="font-weight:700;">Simulate Vehicle Entry</div>
+              <div style="font-size:0.75rem; opacity:0.8;">Generate random car, read plate, assign available slot</div>
+            </div>
+          </button>
+
+          <button class="btn btn-danger" style="justify-content:flex-start; padding:0.85rem;" onclick="runQuickExit()">
+            <i class="fa-solid fa-arrow-right-from-bracket" style="font-size:1.1rem;"></i>
+            <div style="text-align:left;">
+              <div style="font-weight:700;">Simulate Vehicle Exit</div>
+              <div style="font-size:0.75rem; opacity:0.8;">Release a parked car, compute parking duration & fee</div>
+            </div>
+          </button>
+
+          <button class="btn btn-secondary" style="justify-content:flex-start; padding:0.85rem;" onclick="runQuickAutoDemo()">
+            <i class="fa-solid fa-forward-step" style="font-size:1.1rem; color:var(--accent-amber);"></i>
+            <div style="text-align:left;">
+              <div style="font-weight:700;">Auto Demo Step</div>
+              <div style="font-size:0.75rem; opacity:0.8;">Alternate automatically between arrival and checkout</div>
+            </div>
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" onclick="closeQuickSimModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Receipt & Event Modal -->
+  <div class="modal-overlay" id="receiptModal">
+    <div class="modal-content" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3 id="receiptModalTitle"><i class="fa-solid fa-ticket"></i> Parking Transaction Slip</h3>
+        <button class="modal-close" onclick="closeReceiptModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="receiptModalBody">
+        <!-- Rendered dynamically -->
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="printReceiptSlip()">
+          <i class="fa-solid fa-print"></i> Print Slip
+        </button>
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn btn-success btn-sm" id="payNowBtn" onclick="showPaymentModal()" style="display:none; background:#166534; color:#fff;">
+            <i class="fa-solid fa-credit-card"></i> Pay Now
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="closeReceiptModal()">Acknowledge</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payment Modal -->
+  <div class="modal-overlay" id="paymentModal">
+    <div class="modal-content" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-credit-card" style="color:#38bdf8;"></i> Select Payment Method</h3>
+        <button class="modal-close" onclick="closePaymentModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="text-align:center; margin-bottom:1.25rem;">
+          <div style="font-size:2rem; font-weight:800; color:#22c55e;" id="paymentAmount">₹0.00</div>
+          <div style="font-size:0.8rem; color:var(--text-muted);">Total Amount Due (GST Inclusive)</div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-bottom:1rem;">
+          <button class="pay-method-btn" onclick="selectPayment('UPI')" style="border:2px solid var(--border-color); background:rgba(0,0,0,0.3); border-radius:10px; padding:1rem; cursor:pointer; color:var(--text-main); display:flex; flex-direction:column; align-items:center; gap:0.5rem; transition:all 0.2s;">
+            <i class="fa-solid fa-mobile-screen-button" style="font-size:1.6rem; color:#8b5cf6;"></i>
+            <span style="font-weight:700;">UPI</span>
+            <span style="font-size:0.72rem; color:var(--text-muted);">GPay / PhonePe / Paytm</span>
+          </button>
+          <button class="pay-method-btn" onclick="selectPayment('Fastag')" style="border:2px solid var(--border-color); background:rgba(0,0,0,0.3); border-radius:10px; padding:1rem; cursor:pointer; color:var(--text-main); display:flex; flex-direction:column; align-items:center; gap:0.5rem; transition:all 0.2s;">
+            <i class="fa-solid fa-bolt" style="font-size:1.6rem; color:#f59e0b;"></i>
+            <span style="font-weight:700;">FASTag</span>
+            <span style="font-size:0.72rem; color:var(--text-muted);">Auto RFID Debit</span>
+          </button>
+          <button class="pay-method-btn" onclick="selectPayment('Card')" style="border:2px solid var(--border-color); background:rgba(0,0,0,0.3); border-radius:10px; padding:1rem; cursor:pointer; color:var(--text-main); display:flex; flex-direction:column; align-items:center; gap:0.5rem; transition:all 0.2s;">
+            <i class="fa-solid fa-credit-card" style="font-size:1.6rem; color:#3b82f6;"></i>
+            <span style="font-weight:700;">Card</span>
+            <span style="font-size:0.72rem; color:var(--text-muted);">Debit / Credit Card</span>
+          </button>
+          <button class="pay-method-btn" onclick="selectPayment('Cash')" style="border:2px solid var(--border-color); background:rgba(0,0,0,0.3); border-radius:10px; padding:1rem; cursor:pointer; color:var(--text-main); display:flex; flex-direction:column; align-items:center; gap:0.5rem; transition:all 0.2s;">
+            <i class="fa-solid fa-money-bill-wave" style="font-size:1.6rem; color:#22c55e;"></i>
+            <span style="font-weight:700;">Cash</span>
+            <span style="font-size:0.72rem; color:var(--text-muted);">Pay at Counter</span>
+          </button>
+        </div>
+        <div id="paymentQR" style="display:none; text-align:center; padding:1rem; background:rgba(0,0,0,0.3); border-radius:10px;">
+          <div style="font-size:4rem; margin-bottom:0.5rem;">📱</div>
+          <div style="font-weight:700; margin-bottom:0.25rem;" id="paymentQRLabel">Scan QR to Pay</div>
+          <div style="font-family:monospace; font-size:0.85rem; color:var(--text-muted);">UPI ID: parkvision@upi</div>
+          <div style="font-size:1.5rem; font-weight:800; color:#22c55e; margin-top:0.5rem;" id="paymentQRAmount">₹0.00</div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.5rem;">
+        <button class="btn btn-secondary btn-sm" onclick="closePaymentModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="confirmPayBtn" onclick="confirmPayment()" style="background:#166534;">
+          <i class="fa-solid fa-check"></i> Confirm Payment
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container"></div>
+
+  <!-- Global JavaScript Utilities -->
+  <script>
+    function updateClock() {
+      const el = document.getElementById('systemClock');
+      if (el) {
+        const now = new Date();
+        el.innerText = now.toLocaleTimeString() + ' | ' + now.toLocaleDateString();
+      }
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    function playGateSound(type) {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        if (type === 'alarm') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(820, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(320, ctx.currentTime + 0.35);
+          gain.gain.setValueAtTime(0.35, ctx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.4);
+        } else {
+          // Dual-tone harmonic barrier chime
+          const osc1 = ctx.createOscillator();
+          const osc2 = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc1.type = 'sine';
+          osc2.type = 'sine';
+          osc1.frequency.setValueAtTime(587.33, ctx.currentTime);
+          osc1.frequency.setValueAtTime(880.00, ctx.currentTime + 0.12);
+          osc2.frequency.setValueAtTime(739.99, ctx.currentTime);
+          osc2.frequency.setValueAtTime(1174.66, ctx.currentTime + 0.12);
+          gain.gain.setValueAtTime(0.25, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
+          osc1.connect(gain);
+          osc2.connect(gain);
+          gain.connect(ctx.destination);
+          osc1.start();
+          osc2.start();
+          osc1.stop(ctx.currentTime + 0.55);
+          osc2.stop(ctx.currentTime + 0.55);
+        }
+      } catch (e) {
+        // AudioContext ignored if user has not interacted with document yet
+      }
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      
+      let icon = 'fa-info-circle';
+      if (type === 'success') icon = 'fa-check-circle';
+      if (type === 'error') icon = 'fa-triangle-exclamation';
+      if (type === 'warning') icon = 'fa-shield-halved';
+
+      toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${message}</span>`;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(50px)';
+        toast.style.transition = 'all 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, 4500);
+    }
+
+    function triggerQuickSimulateModal() {
+      document.getElementById('quickSimModal').classList.add('active');
+    }
+    function closeQuickSimModal() {
+      document.getElementById('quickSimModal').classList.remove('active');
+    }
+    function closeReceiptModal() {
+      document.getElementById('receiptModal').classList.remove('active');
+    }
+
+    function printReceiptSlip() {
+      const modalBody = document.getElementById('receiptModalBody').innerHTML;
+      const win = window.open('', '_blank', 'width=450,height=600');
+      win.document.write(`
+        <html>
+        <head>
+          <title>Parking Transaction Slip</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; margin: 20px; font-size: 13px; color: #111; line-height: 1.6; }
+            .plate-badge { font-family: monospace; font-size: 18px; font-weight: 800; border: 2px solid #000; padding: 6px 14px; display: inline-block; border-radius: 4px; margin-bottom: 8px; }
+            .receipt-header { text-align: center; border-bottom: 1px dashed #666; padding-bottom: 10px; margin-bottom: 12px; }
+            .receipt-footer { text-align: center; border-top: 1px dashed #666; padding-top: 10px; margin-top: 14px; font-size: 11px; color: #555; }
+            .row { display: flex; justify-content: space-between; margin: 4px 0; }
+            .barcode { font-family: "Courier New", monospace; letter-spacing: 4px; font-size: 24px; font-weight: 900; text-align: center; margin: 12px 0; }
+          </style>
+        </head>
+        <body onload="window.print(); window.close();">
+          <div class="receipt-header">
+            <h2 style="margin:0; font-size:16px;">PARKVISION SMART ANPR</h2>
+            <div style="font-size:11px;">Autonomous Terminal 01 - Smart Parking</div>
+          </div>
+          ${modalBody}
+          <div class="receipt-footer">
+            <div>Thank you for choosing ParkVision Smart Parking</div>
+            <div>Computer Generated Slip - Fastag & GST Compliant</div>
+          </div>
+        </body>
+        </html>
+      `);
+      win.document.close();
+    }
+
+    function renderReceipt(data) {
+      const body = document.getElementById('receiptModalBody');
+      const title = document.getElementById('receiptModalTitle');
+      
+      if (!data) return;
+
+      if (data.blacklisted) {
+        playGateSound('alarm');
+        title.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-red);"></i> SECURITY INTERCEPT ALERT';
+        body.innerHTML = `
+          <div style="text-align:center; margin-bottom: 1rem;">
+            <div class="plate-badge" style="font-size: 1.5rem; padding: 8px 18px; margin-bottom: 0.5rem; background:#fee2e2; border-color:#ef4444; color:#991b1b;">${data.plate_number}</div>
+            <div class="badge badge-occupied" style="font-size:0.95rem; font-weight:700;"><i class="fa-solid fa-ban"></i> BARRIER LOCKED - ENTRY DENIED</div>
+          </div>
+          <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 8px; padding: 1.1rem; font-size: 0.88rem; line-height: 1.7; color:#fca5a5;">
+            <div style="font-weight:700; margin-bottom:4px;"><i class="fa-solid fa-shield-halved"></i> Enforcement Incident Flagged:</div>
+            <div>${data.reason || 'Flagged on vehicle security blacklist.'}</div>
+            <div style="margin-top:8px; font-size:0.8rem; color:#f87171;">Terminal Security and Parking Warden dispatched to Gate 01.</div>
+          </div>
+        `;
+      } else if (data.action === 'EXIT' || data.status === 'COMPLETED' || (data.amount !== undefined && data.exit_time) || (data.amount !== undefined && data.amount > 0)) {
+        playGateSound('chime');
+        title.innerHTML = '<i class="fa-solid fa-receipt" style="color:var(--accent-cyan);"></i> Tax Invoice & Checkout Receipt';
+        const recNo = data.receipt_id || data.receipt_number || 'REC-2026-COMPLETED';
+        const payMode = data.payment_mode || 'Fastag Auto-Debit';
+        const total = (data.amount || 0).toFixed(2);
+        const baseAmt = (data.base_amount || (data.amount / 1.18) || 0).toFixed(2);
+        const gstAmt = (data.gst_amount || (data.amount - (data.amount / 1.18)) || 0).toFixed(2);
+
+        body.innerHTML = `
+          <div style="text-align:center; margin-bottom: 0.75rem; border-bottom:1px dashed var(--border-color); padding-bottom:0.75rem;">
+            <div class="plate-badge" style="font-size: 1.4rem; padding: 6px 14px; margin-bottom: 0.4rem;">${data.plate_number}</div>
+            <div style="font-size: 2.2rem; font-weight: 800; color: #34d399; margin: 0.2rem 0;">₹${total}</div>
+            <span class="badge badge-ev" style="font-size:0.78rem;"><i class="fa-solid fa-circle-check"></i> ${payMode}</span>
+          </div>
+          <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 0.9rem; font-size: 0.85rem; line-height: 1.8;">
+            <div style="display:flex; justify-content:space-between;"><span>Receipt Number:</span> <strong>${recNo}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span>Vehicle Type:</span> <strong style="color:var(--accent-cyan);">${getVehicleIcon(data.vehicle_type)} ${(data.vehicle_type||'car').toUpperCase()}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span>Vacated Bay:</span> <strong>${data.slot_number}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span>Rate Applied:</span> <span>${data.rates_applied ? '₹'+data.rates_applied.first_hour+'/hr (1st) + ₹'+data.rates_applied.additional_hour+'/hr' : getVehicleTariff(data.vehicle_type)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>Check-In Time:</span> <span>${data.entry_time}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>Check-Out Time:</span> <span>${data.exit_time || 'Just Now'}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>Duration:</span> <strong>${data.formatted_duration || data.duration_formatted || '60 mins'} (${data.hours_charged || 1} hr billed)</strong></div>
+            <div style="border-top:1px dashed var(--border-color); margin:4px 0; padding-top:4px; display:flex; justify-content:space-between;">
+              <span>Taxable Amount:</span> <span>₹${baseAmt}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between;"><span>CGST + SGST (18%):</span> <span>₹${gstAmt}</span></div>
+            <div style="display:flex; justify-content:space-between; font-weight:700; color:#34d399;"><span>Total Settled:</span> <span>₹${total}</span></div>
+            ${data.fastag_ref ? `<div style="display:flex; justify-content:space-between; color:var(--accent-cyan); font-size:0.78rem;"><span>Fastag Ref:</span> <span>${data.fastag_ref}</span></div>` : ''}
+            <div style="display:flex; justify-content:space-between; margin-top:2px;"><span>Exit Barrier:</span> <strong style="color:var(--accent-green);"><i class="fa-solid fa-torii-gate"></i> OPEN - CLEAR TO EXIT</strong></div>
+          </div>
+          <div style="text-align:center; margin-top:0.75rem; font-family:monospace; letter-spacing:3px; font-size:1.1rem; color:var(--text-sub);">
+            |||| || ||| ||||| || ||| ||
+          </div>
+        `;
+      } else {
+        // Entry or active parked
+        playGateSound('chime');
+        title.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket" style="color:var(--accent-green);"></i> Digital Entry Ticket';
+        const tckNo = data.ticket_number || data.receipt_number || `TCK-${data.slot_number}`;
+        body.innerHTML = `
+          <div style="text-align:center; margin-bottom: 1rem; border-bottom:1px dashed var(--border-color); padding-bottom:1rem;">
+            <div style="font-size:0.75rem; color:var(--text-sub); text-transform:uppercase; margin-bottom:4px;">PARKVISION SMART PARKING TERMINAL 01</div>
+            <div class="plate-badge" style="font-size: 1.5rem; padding: 6px 16px; margin: 0.4rem 0;">${data.plate_number}</div>
+            <div><span class="badge badge-available" style="font-size:0.95rem; font-weight:700;"><i class="fa-solid fa-square-parking"></i> ASSIGNED BAY: ${data.slot_number}</span></div>
+          </div>
+          <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 1rem; font-size: 0.85rem; line-height: 1.9;">
+            <div style="display:flex; justify-content:space-between;"><span>Ticket Reference:</span> <strong>${tckNo}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span>Vehicle Type:</span> <strong>${(data.vehicle_type || 'Car').toUpperCase()}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span>Check-In Timestamp:</span> <strong>${data.entry_time}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span>Gate Barrier Status:</span> <strong style="color:var(--accent-green);"><i class="fa-solid fa-torii-gate"></i> BARRIER OPEN - PASS</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span>Vehicle Type:</span> <strong style="color:var(--accent-cyan);">${getVehicleIcon(data.vehicle_type)} ${(data.vehicle_type||'car').toUpperCase()}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span>Hourly Tariff:</span> <span>${getVehicleTariff(data.vehicle_type)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>Est. Charges (1hr):</span> <span style="color:var(--accent-amber);">${getVehicleFirstHour(data.vehicle_type)}</span></div>
+          </div>
+          <div style="text-align:center; margin-top:1rem; font-family:monospace; letter-spacing:3px; font-size:1.1rem; color:var(--text-sub);">
+            ||| | ||||| || |||| ||| |||
+          </div>
+        `;
+      }
+
+      // Show Pay button only for exit/checkout
+      const payBtn = document.getElementById('payNowBtn');
+      if (payBtn) {
+        payBtn.style.display = (data.action === 'EXIT' || (data.amount !== undefined && data.amount > 0 && !data.blacklisted)) ? 'inline-flex' : 'none';
+        payBtn.dataset.amount = data.amount || 0;
+      }
+
+      document.getElementById('receiptModal').classList.add('active');
+    }
+
+    async function runQuickEntry() {
+      closeQuickSimModal();
+      showToast('Processing simulated vehicle entry...', 'info');
+      try {
+        const res = await fetch('/api/simulate-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+        const json = await res.json();
+        if (json.success && json.parking_action) {
+          showToast(`Checked in: ${json.parking_action.plate_number} -> ${json.parking_action.slot_number}`, 'success');
+          renderReceipt(json.parking_action);
+          if (typeof refreshDashboardData === 'function') refreshDashboardData();
+          if (typeof loadParkingSlots === 'function') loadParkingSlots();
+        } else {
+          showToast(json.message || (json.parking_action && json.parking_action.message) || 'Entry could not be processed', 'error');
+          if (json.parking_action && json.parking_action.blacklisted) renderReceipt(json.parking_action);
+        }
+      } catch (err) {
+        showToast('Error communicating with server: ' + err.message, 'error');
+      }
+    }
+
+    async function runQuickExit() {
+      closeQuickSimModal();
+      showToast('Processing simulated vehicle checkout...', 'info');
+      try {
+        const res = await fetch('/api/simulate-exit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+        const json = await res.json();
+        if (json.success && json.parking_action && json.parking_action.success) {
+          showToast(`Exited: ${json.parking_action.plate_number}. Fee: ₹${json.parking_action.amount}`, 'success');
+          renderReceipt(json.parking_action);
+          if (typeof refreshDashboardData === 'function') refreshDashboardData();
+          if (typeof loadParkingSlots === 'function') loadParkingSlots();
+        } else {
+          showToast(json.message || (json.parking_action && json.parking_action.message) || 'No active parked vehicles to exit', 'warning');
+        }
+      } catch (err) {
+        showToast('Error communicating with server: ' + err.message, 'error');
+      }
+    }
+
+    async function runQuickAutoDemo() {
+      closeQuickSimModal();
+      showToast('Executing Auto-Demo step...', 'info');
+      try {
+        const res = await fetch('/api/auto-demo', { method: 'POST' });
+        const json = await res.json();
+        if (json.success && json.parking_action) {
+          const act = json.parking_action;
+          if (act.action === 'ENTRY') {
+            showToast(`Auto Demo: Vehicle ${act.plate_number} entered slot ${act.slot_number}`, 'success');
+          } else if (act.action === 'EXIT') {
+            showToast(`Auto Demo: Vehicle ${act.plate_number} exited. Fee: ₹${act.amount}`, 'info');
+          }
+          renderReceipt(act);
+          if (typeof refreshDashboardData === 'function') refreshDashboardData();
+          if (typeof loadParkingSlots === 'function') loadParkingSlots();
+        }
+      } catch (err) {
+        showToast('Auto demo error: ' + err.message, 'error');
+      }
+    }
+
+    // Vehicle type icon helpers
+    function getVehicleIcon(type) {
+      const icons = { car:'🚗', motorcycle:'🏍️', bike:'🏍️', bus:'🚌', truck:'🚛', van:'🚐', auto:'🛺', ev:'⚡' };
+      return icons[(type||'car').toLowerCase()] || '🚗';
+    }
+    function getVehicleTariff(type) {
+      const t = { car:'₹30/hr + ₹20 addl', motorcycle:'₹15/hr + ₹10 addl', bike:'₹15/hr + ₹10 addl', bus:'₹60/hr + ₹40 addl', truck:'₹60/hr + ₹40 addl', van:'₹35/hr + ₹25 addl', auto:'₹20/hr + ₹15 addl', ev:'₹25/hr + ₹15 addl' };
+      return t[(type||'car').toLowerCase()] || '₹30/hr + ₹20 addl';
+    }
+    function getVehicleFirstHour(type) {
+      const t = { car:'₹30', motorcycle:'₹15', bike:'₹15', bus:'₹60', truck:'₹60', van:'₹35', auto:'₹20', ev:'₹25' };
+      return t[(type||'car').toLowerCase()] || '₹30';
+    }
+
+    // Payment modal functions
+    let _paymentAmountGlobal = 0;
+    function showPaymentModal() {
+      const btn = document.getElementById('payNowBtn');
+      _paymentAmountGlobal = parseFloat(btn ? btn.dataset.amount : 0) || 0;
+      document.getElementById('paymentAmount').innerText = '₹' + _paymentAmountGlobal.toFixed(2);
+      document.getElementById('paymentQR').style.display = 'none';
+      document.getElementById('paymentModal').classList.add('active');
+    }
+    function closePaymentModal() {
+      document.getElementById('paymentModal').classList.remove('active');
+    }
+    function selectPayment(mode) {
+      const qr = document.getElementById('paymentQR');
+      const label = document.getElementById('paymentQRLabel');
+      const qrAmt = document.getElementById('paymentQRAmount');
+      document.querySelectorAll('.pay-method-btn').forEach(b => b.style.borderColor = 'var(--border-color)');
+      if (window.event && window.event.target) {
+        const btn = window.event.target.closest('.pay-method-btn');
+        if (btn) btn.style.borderColor = 'var(--accent-blue)';
+      }
+      if (mode === 'UPI') {
+        qr.style.display = 'block';
+        label.innerText = 'Scan QR to Pay via UPI';
+        qrAmt.innerText = '₹' + _paymentAmountGlobal.toFixed(2);
+      } else if (mode === 'Fastag') {
+        qr.style.display = 'block';
+        label.innerText = 'FASTag Auto-Debit Processing...';
+        qrAmt.innerText = '₹' + _paymentAmountGlobal.toFixed(2);
+      } else {
+        qr.style.display = 'none';
+      }
+    }
+    function confirmPayment() {
+      closePaymentModal();
+      closeReceiptModal();
+      showToast('✅ Payment of ₹' + _paymentAmountGlobal.toFixed(2) + ' confirmed! Barrier opening.', 'success');
+      if (typeof setBarrierStatus === 'function') setBarrierStatus('OPEN');
+      if (typeof exitSetBarrierStatus === 'function') exitSetBarrierStatus('OPEN');
+    }
+  </script>
+
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

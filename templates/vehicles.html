@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Vehicle Registry | Smart Parking ANPR{% endblock %}
+{% block page_title %}Vehicle Database Registry{% endblock %}
+{% block page_subtitle %}Search and Monitor Registered Vehicles, Lifetime Visits, and Occupancy Status{% endblock %}
+
+{% block content %}
+<!-- Search & Filter Card -->
+<div class="card" style="margin-bottom:1.5rem;">
+  <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem;">
+    <div style="display:flex; align-items:center; gap:0.75rem; flex-grow:1; max-width:550px;">
+      <div style="position:relative; width:100%;">
+        <i class="fa-solid fa-magnifying-glass" style="position:absolute; left:14px; top:12px; color:var(--text-sub);"></i>
+        <input type="text" id="vehicleSearchInput" class="form-control" placeholder="Search by Plate (e.g. TN09), Owner name, or Phone..." style="padding-left:2.5rem;" oninput="fetchVehicles()">
+      </div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:0.75rem;">
+      <select id="vehicleTypeFilter" class="form-control" style="width:140px;" onchange="fetchVehicles()">
+        <option value="all">All Types</option>
+        <option value="car">Cars</option>
+        <option value="motorcycle">Bikes</option>
+        <option value="bus">Buses</option>
+        <option value="truck">Trucks</option>
+      </select>
+
+      <select id="vehicleStatusFilter" class="form-control" style="width:150px;" onchange="fetchVehicles()">
+        <option value="all">All Vehicles</option>
+        <option value="parked">Currently Parked</option>
+      </select>
+
+      <button class="btn btn-primary btn-sm" onclick="fetchVehicles()">
+        <i class="fa-solid fa-filter"></i> Apply
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Vehicles Table Card -->
+<div class="card">
+  <div class="section-header">
+    <h2><i class="fa-solid fa-car" style="color:var(--accent-cyan);"></i> Registered Vehicles (<span id="vehicleCountDisplay">0</span>)</h2>
+    <span class="badge badge-ev">Auto-Synced</span>
+  </div>
+
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Plate Number</th>
+          <th>Type</th>
+          <th>Owner Name</th>
+          <th>Phone</th>
+          <th>Current Status</th>
+          <th>Current Slot</th>
+          <th>Total Visits</th>
+          <th>Total Paid</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="vehiclesTableBody">
+        <tr>
+          <td colspan="9" style="text-align:center; padding:2rem; color:var(--text-sub);">
+            <i class="fa-solid fa-spinner fa-spin"></i> Loading vehicles registry...
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/vehicles.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    fetchVehicles();
+  });
+</script>
+{% endblock %}

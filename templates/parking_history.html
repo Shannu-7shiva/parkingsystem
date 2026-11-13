@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Parking History | Smart Parking ANPR{% endblock %}
+{% block page_title %}Parking History & Billing Records{% endblock %}
+{% block page_subtitle %}Audit Trail of Vehicle Entries, Departures, Durations, and Revenue Receipts{% endblock %}
+
+{% block content %}
+<!-- Search & Filter Card -->
+<div class="card" style="margin-bottom:1.5rem;">
+  <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem;">
+    <div style="display:flex; align-items:center; gap:0.75rem; flex-grow:1; max-width:550px;">
+      <div style="position:relative; width:100%;">
+        <i class="fa-solid fa-magnifying-glass" style="position:absolute; left:14px; top:12px; color:var(--text-sub);"></i>
+        <input type="text" id="historySearchInput" class="form-control" placeholder="Search by Plate (e.g. TN09) or Slot (e.g. P02)..." style="padding-left:2.5rem;" oninput="fetchHistory()">
+      </div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:0.75rem;">
+      <select id="historyStatusFilter" class="form-control" style="width:150px;" onchange="fetchHistory()">
+        <option value="all">All Records</option>
+        <option value="PARKED">Active (Parked)</option>
+        <option value="COMPLETED">Completed</option>
+      </select>
+
+      <a href="/api/parking-history/export" class="btn btn-secondary btn-sm" download>
+        <i class="fa-solid fa-file-csv"></i> Export CSV
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- History Table Card -->
+<div class="card">
+  <div class="section-header">
+    <h2><i class="fa-solid fa-list-check" style="color:var(--accent-cyan);"></i> Session Records (<span id="historyCountDisplay">0</span>)</h2>
+    <span class="badge badge-ev">SQL Verified</span>
+  </div>
+
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Plate Number</th>
+          <th>Slot</th>
+          <th>Status</th>
+          <th>Entry Timestamp</th>
+          <th>Exit Timestamp</th>
+          <th>Duration</th>
+          <th>Amount Paid</th>
+          <th>Receipt</th>
+        </tr>
+      </thead>
+      <tbody id="historyTableBody">
+        <tr>
+          <td colspan="9" style="text-align:center; padding:2rem; color:var(--text-sub);">
+            <i class="fa-solid fa-spinner fa-spin"></i> Loading session records...
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/vehicles.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    fetchHistory();
+  });
+</script>
+{% endblock %}

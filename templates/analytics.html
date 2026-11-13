@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics & Business Intelligence | Smart Parking ANPR{% endblock %}
+{% block page_title %}Analytics & Business Intelligence{% endblock %}
+{% block page_subtitle %}Visual Telemetry, Peak Hour Distribution, Revenue Trends, and Fleet Demographics{% endblock %}
+
+{% block extra_css %}
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- Top KPI Summary Cards -->
+<div class="metrics-grid">
+  <div class="metric-card">
+    <div class="metric-icon"><i class="fa-solid fa-car-on"></i></div>
+    <div class="metric-info">
+      <h3>Lifetime Vehicles</h3>
+      <div class="metric-value" id="kpiTotalVehicles">--</div>
+    </div>
+  </div>
+
+  <div class="metric-card rev">
+    <div class="metric-icon"><i class="fa-solid fa-sack-dollar"></i></div>
+    <div class="metric-info">
+      <h3>Total Revenue</h3>
+      <div class="metric-value" id="kpiTotalRevenue" style="color:#34d399;">₹0.00</div>
+    </div>
+  </div>
+
+  <div class="metric-card time">
+    <div class="metric-icon"><i class="fa-solid fa-stopwatch"></i></div>
+    <div class="metric-info">
+      <h3>Average Duration</h3>
+      <div class="metric-value" id="kpiAvgDuration">-- mins</div>
+    </div>
+  </div>
+
+  <div class="metric-card avail">
+    <div class="metric-icon"><i class="fa-solid fa-gauge"></i></div>
+    <div class="metric-info">
+      <h3>Lot Occupancy</h3>
+      <div class="metric-value" id="kpiOccupancyPct" style="color:var(--accent-cyan);">--%</div>
+    </div>
+  </div>
+</div>
+
+<!-- Charts Grid -->
+<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap:1.5rem;">
+  
+  <!-- Chart 1: 7-Day Vehicle Volume Trend -->
+  <div class="card">
+    <div class="section-header">
+      <h2><i class="fa-solid fa-chart-column" style="color:var(--accent-cyan);"></i> Daily Vehicle Traffic (Last 7 Days)</h2>
+    </div>
+    <div style="height: 280px; position:relative;">
+      <canvas id="chartDailyVehicles"></canvas>
+    </div>
+  </div>
+
+  <!-- Chart 2: 7-Day Revenue Trend -->
+  <div class="card">
+    <div class="section-header">
+      <h2><i class="fa-solid fa-chart-line" style="color:#34d399;"></i> Daily Revenue (INR ₹)</h2>
+    </div>
+    <div style="height: 280px; position:relative;">
+      <canvas id="chartDailyRevenue"></canvas>
+    </div>
+  </div>
+
+  <!-- Chart 3: Peak Parking Hours Distribution (0 - 23 Hours) -->
+  <div class="card">
+    <div class="section-header">
+      <h2><i class="fa-solid fa-clock" style="color:var(--accent-amber);"></i> Peak Hours Hourly Distribution</h2>
+    </div>
+    <div style="height: 280px; position:relative;">
+      <canvas id="chartPeakHours"></canvas>
+    </div>
+  </div>
+
+  <!-- Chart 4: Vehicle Type Distribution (Doughnut) -->
+  <div class="card">
+    <div class="section-header">
+      <h2><i class="fa-solid fa-chart-pie" style="color:var(--accent-purple);"></i> Fleet Vehicle Demographics</h2>
+    </div>
+    <div style="height: 280px; position:relative;">
+      <canvas id="chartVehicleTypes"></canvas>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/analytics.js') }}"></script>
+{% endblock %}

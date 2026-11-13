@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard | Smart Parking ANPR System{% endblock %}
+{% block page_title %}Terminal Command Center{% endblock %}
+{% block page_subtitle %}Autonomous Number Plate Recognition & Dynamic Parking Management{% endblock %}
+
+{% block content %}
+<!-- Quick Simulator Banner -->
+<div class="control-banner">
+  <div class="control-text">
+    <h2><i class="fa-solid fa-microchip" style="color:var(--accent-cyan);"></i> Software Simulation Engine</h2>
+    <p>Simulate vehicle check-ins, license plate recognition, and fee computation in real-time.</p>
+  </div>
+  <div class="control-buttons">
+    <button class="btn btn-primary btn-pulse" onclick="runQuickEntry()">
+      <i class="fa-solid fa-arrow-right-to-bracket"></i> Simulate Entry
+    </button>
+    <button class="btn btn-danger" onclick="runQuickExit()">
+      <i class="fa-solid fa-arrow-right-from-bracket"></i> Simulate Exit
+    </button>
+    <button class="btn btn-secondary" onclick="runQuickAutoDemo()">
+      <i class="fa-solid fa-forward-step" style="color:var(--accent-amber);"></i> Auto Demo
+    </button>
+  </div>
+</div>
+
+<!-- Key Performance Metrics Grid -->
+<div class="metrics-grid">
+  <div class="metric-card">
+    <div class="metric-icon"><i class="fa-solid fa-warehouse"></i></div>
+    <div class="metric-info">
+      <h3>Total Slots</h3>
+      <div class="metric-value" id="valTotalSlots">15</div>
+    </div>
+  </div>
+
+  <div class="metric-card avail">
+    <div class="metric-icon"><i class="fa-solid fa-circle-check"></i></div>
+    <div class="metric-info">
+      <h3>Available</h3>
+      <div class="metric-value" id="valAvailableSlots" style="color:var(--accent-green);">--</div>
+    </div>
+  </div>
+
+  <div class="metric-card occ">
+    <div class="metric-icon"><i class="fa-solid fa-car"></i></div>
+    <div class="metric-info">
+      <h3>Occupied</h3>
+      <div class="metric-value" id="valOccupiedSlots" style="color:var(--accent-red);">--</div>
+    </div>
+  </div>
+
+  <div class="metric-card res">
+    <div class="metric-icon"><i class="fa-solid fa-bookmark"></i></div>
+    <div class="metric-info">
+      <h3>Reserved</h3>
+      <div class="metric-value" id="valReservedSlots" style="color:var(--accent-amber);">--</div>
+    </div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-icon"><i class="fa-solid fa-list-check"></i></div>
+    <div class="metric-info">
+      <h3>Today's Vehicles</h3>
+      <div class="metric-value" id="valTodaysVehicles">--</div>
+    </div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-icon"><i class="fa-solid fa-square-parking"></i></div>
+    <div class="metric-info">
+      <h3>Currently Parked</h3>
+      <div class="metric-value" id="valCurrentlyParked">--</div>
+    </div>
+  </div>
+
+  <div class="metric-card rev">
+    <div class="metric-icon"><i class="fa-solid fa-indian-rupee-sign"></i></div>
+    <div class="metric-info">
+      <h3>Today's Revenue</h3>
+      <div class="metric-value" id="valTodaysRevenue" style="color:#34d399;">₹0.00</div>
+    </div>
+  </div>
+
+  <div class="metric-card time">
+    <div class="metric-icon"><i class="fa-solid fa-stopwatch"></i></div>
+    <div class="metric-info">
+      <h3>Avg Duration</h3>
+      <div class="metric-value" id="valAvgDuration" style="font-size:1.35rem;">--</div>
+    </div>
+  </div>
+</div>
+
+<!-- Main 2-Column Section -->
+<div class="dashboard-layout">
+  
+  <!-- Left Column: Virtual Parking Lot Live Preview -->
+  <div class="card">
+    <div class="section-header">
+      <h2><i class="fa-solid fa-map" style="color:var(--accent-cyan);"></i> Live Parking Lot View</h2>
+      <a href="{{ url_for('dashboard_views.parking_lot') }}" class="btn btn-sm btn-secondary">
+        Full Screen Map <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.75rem;"></i>
+      </a>
+    </div>
+
+    <!-- Mini Parking Lot Grid Container -->
+    <div class="parking-lot-container" style="padding: 1.25rem;">
+      <div class="lot-gate-banner" style="margin-bottom: 1rem; padding: 0.6rem 1rem;">
+        <div class="gate-badge">
+          <i class="fa-solid fa-door-open" style="color:var(--accent-green);"></i> Entrance Lane 01
+        </div>
+        <div class="road-arrow" style="font-size:1rem;">
+          <i class="fa-solid fa-chevron-down"></i> ENTRY FLOW
+        </div>
+        <div class="gate-badge">
+          <i class="fa-solid fa-door-closed" style="color:var(--accent-red);"></i> Exit Lane 01
+        </div>
+      </div>
+
+      <div class="slots-grid" id="dashboardSlotsGrid" style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));">
+        <!-- Rendered by dashboard.js -->
+        <div style="grid-column: 1 / -1; text-align:center; padding: 2rem; color:var(--text-sub);">
+          <i class="fa-solid fa-spinner fa-spin"></i> Loading slots status...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Recent Activity Feed & Quick Live ANPR Link -->
+  <div style="display:flex; flex-direction:column; gap:1.5rem;">
+    
+    <!-- Quick ANPR Status Widget -->
+    <div class="card" style="background: linear-gradient(135deg, rgba(14, 27, 49, 0.9), rgba(15, 23, 42, 0.9));">
+      <div class="section-header" style="margin-bottom: 0.75rem;">
+        <h2><i class="fa-solid fa-camera" style="color:var(--accent-cyan);"></i> ANPR Pipeline</h2>
+        <span class="badge badge-available">ONLINE</span>
+      </div>
+      <p style="font-size:0.82rem; color:var(--text-muted); line-height: 1.6; margin-bottom: 1rem;">
+        Optical character recognition engine active for High-Definition license plates. Supports Indian standard & Bharat series formats.
+      </p>
+      <a href="{{ url_for('dashboard_views.live_camera') }}" class="btn btn-primary" style="width:100%;">
+        <i class="fa-solid fa-video"></i> Launch Live Camera
+      </a>
+    </div>
+
+    <!-- Recent Records Activity Feed -->
+    <div class="card" style="flex-grow:1;">
+      <div class="section-header">
+        <h2><i class="fa-solid fa-clock-rotate-left" style="color:var(--accent-amber);"></i> Recent Activity</h2>
+        <a href="{{ url_for('vehicles_views.parking_history') }}" style="font-size:0.8rem; color:var(--accent-cyan); text-decoration:none;">View All</a>
+      </div>
+
+      <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Plate</th>
+              <th>Slot</th>
+              <th>Status</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody id="recentActivityTbody">
+            <tr>
+              <td colspan="4" style="text-align:center; color:var(--text-sub); padding:2rem;">
+                <i class="fa-solid fa-spinner fa-spin"></i> Loading recent activity...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

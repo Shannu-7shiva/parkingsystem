@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}System Settings | Smart Parking ANPR{% endblock %}
+{% block page_title %}System Configuration & Rates{% endblock %}
+{% block page_subtitle %}Manage Billing Rates, Parking Lot Nomenclature, and Terminal Rules{% endblock %}
+
+{% block content %}
+<div style="max-width: 760px; margin: 0 auto;">
+  <div class="card">
+    <div class="section-header">
+      <h2><i class="fa-solid fa-sliders" style="color:var(--accent-cyan);"></i> Pricing & Operations Configuration</h2>
+      <span class="badge badge-ev">Dynamic Rates</span>
+    </div>
+    <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1.5rem;">
+      Adjust parking tariff rates and parameters. All modifications take effect immediately across all entry and exit calculations without restarting the server.
+    </p>
+
+    <form id="settingsForm" onsubmit="saveSystemSettings(event)">
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.25rem;">
+        
+        <div class="form-group">
+          <label class="form-label" for="settingFirstHour">
+            First Hour Rate (INR ₹)
+          </label>
+          <input type="number" step="0.5" id="settingFirstHour" name="PARKING_FIRST_HOUR_RATE" class="form-control" required>
+          <small style="color:var(--text-sub); font-size:0.75rem;">Default base charge for 0-60 minutes.</small>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="settingAddHour">
+            Additional Hour Rate (INR ₹)
+          </label>
+          <input type="number" step="0.5" id="settingAddHour" name="PARKING_ADDITIONAL_HOUR_RATE" class="form-control" required>
+          <small style="color:var(--text-sub); font-size:0.75rem;">Fee added for each additional hour or fraction thereof.</small>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="settingGrace">
+            Free Grace Period (Minutes)
+          </label>
+          <input type="number" step="1" id="settingGrace" name="GRACE_PERIOD_MINUTES" class="form-control" required>
+          <small style="color:var(--text-sub); font-size:0.75rem;">Vehicles exiting within grace period pay ₹0.00.</small>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="settingCurrency">
+            Currency Symbol
+          </label>
+          <input type="text" id="settingCurrency" name="CURRENCY_SYMBOL" class="form-control" value="₹" required>
+        </div>
+
+      </div>
+
+      <div class="form-group" style="margin-top:0.5rem;">
+        <label class="form-label" for="settingLotName">
+          Parking Lot / Facility Name
+        </label>
+        <input type="text" id="settingLotName" name="PARKING_LOT_NAME" class="form-control" required>
+      </div>
+
+      <div style="margin-top:1.5rem; display:flex; justify-content:flex-end; gap:0.75rem;">
+        <button type="button" class="btn btn-secondary" onclick="loadSystemSettings()">
+          <i class="fa-solid fa-rotate-left"></i> Reset
+        </button>
+        <button type="submit" class="btn btn-primary">
+          <i class="fa-solid fa-floppy-disk"></i> Save Configuration
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/vehicles.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    loadSystemSettings();
+  });
+</script>
+{% endblock %}

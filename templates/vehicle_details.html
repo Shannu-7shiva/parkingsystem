@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Vehicle Dossier - {{ plate_number }} | Smart Parking ANPR{% endblock %}
+{% block page_title %}Vehicle Dossier{% endblock %}
+{% block page_subtitle %}Detailed profile and complete parking activity timeline for {{ plate_number }}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+  <a href="{{ url_for('vehicles_views.vehicles') }}" class="btn btn-secondary btn-sm">
+    <i class="fa-solid fa-arrow-left"></i> Back to Vehicles List
+  </a>
+</div>
+
+<div style="display:grid; grid-template-columns: 340px 1fr; gap:1.5rem;">
+  
+  <!-- Left Column: Vehicle Profile Card -->
+  <div class="card" id="vehicleProfileCard">
+    <div style="text-align:center; margin-bottom:1.5rem;">
+      <div class="plate-badge" style="font-size:1.6rem; padding:8px 18px; margin-bottom:0.75rem;">
+        {{ plate_number }}
+      </div>
+      <div id="vStatusBadgeContainer">
+        <span class="badge badge-available">ACTIVE PROFILE</span>
+      </div>
+    </div>
+
+    <div style="background:rgba(0,0,0,0.3); border-radius:8px; padding:1.25rem; font-size:0.88rem; line-height:2.1; margin-bottom:1.25rem;">
+      <div style="display:flex; justify-content:space-between;"><span>Vehicle Type:</span> <strong id="vPropType">--</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span>Owner Name:</span> <strong id="vPropOwner">--</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span>Phone:</span> <strong id="vPropPhone">--</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span>Currently Parked:</span> <strong id="vPropParked">--</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span>Assigned Slot:</span> <strong id="vPropSlot" style="color:var(--accent-green);">--</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span>Total Visits:</span> <strong id="vPropVisits">--</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span>Total Spent:</span> <strong id="vPropPaid" style="color:#34d399;">--</strong></div>
+    </div>
+
+    <div id="vActionButtons">
+      <!-- Injected dynamically -->
+    </div>
+  </div>
+
+  <!-- Right Column: Timeline / Parking History -->
+  <div class="card">
+    <div class="section-header">
+      <h2><i class="fa-solid fa-clock-rotate-left" style="color:var(--accent-cyan);"></i> Visit Timeline & History</h2>
+      <span class="badge badge-ev">Verified Records</span>
+    </div>
+
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Slot</th>
+            <th>Status</th>
+            <th>Entry Time</th>
+            <th>Exit Time</th>
+            <th>Duration</th>
+            <th>Amount Paid</th>
+          </tr>
+        </thead>
+        <tbody id="vehicleHistoryTbody">
+          <tr>
+            <td colspan="6" style="text-align:center; padding:2rem; color:var(--text-sub);">
+              <i class="fa-solid fa-spinner fa-spin"></i> Loading vehicle visit timeline...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/vehicles.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    loadVehicleDetails('{{ plate_number }}');
+  });
+</script>
+{% endblock %}

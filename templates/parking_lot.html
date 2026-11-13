@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Virtual Parking Lot Map | Smart Parking ANPR{% endblock %}
+{% block page_title %}Virtual Parking Lot Floor Plan{% endblock %}
+{% block page_subtitle %}Live Bay Sensor Simulation, Slot Reservation, and Vehicle Occupancy{% endblock %}
+
+{% block content %}
+<!-- Top Action & Filter Toolbar -->
+<div class="card" style="margin-bottom:1.5rem; padding:1.25rem 1.5rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem;">
+  <div style="display:flex; align-items:center; gap:0.75rem;">
+    <span style="font-size:0.85rem; font-weight:700; color:var(--text-sub); text-transform:uppercase;">Filter Bays:</span>
+    <button class="btn btn-sm btn-primary" onclick="filterSlots('ALL')">All Slots (<span id="countAll">15</span>)</button>
+    <button class="btn btn-sm btn-secondary" onclick="filterSlots('AVAILABLE')">Available (<span id="countAvail">--</span>)</button>
+    <button class="btn btn-sm btn-secondary" onclick="filterSlots('OCCUPIED')">Occupied (<span id="countOcc">--</span>)</button>
+    <button class="btn btn-sm btn-secondary" onclick="filterSlots('EV')"><i class="fa-solid fa-bolt" style="color:var(--accent-ev);"></i> EV</button>
+    <button class="btn btn-sm btn-secondary" onclick="filterSlots('VIP')"><i class="fa-solid fa-crown" style="color:var(--accent-purple);"></i> VIP</button>
+  </div>
+
+  <div style="display:flex; gap:0.75rem;">
+    <button class="btn btn-sm btn-primary" onclick="runQuickEntry()">
+      <i class="fa-solid fa-plus"></i> Park Vehicle
+    </button>
+    <button class="btn btn-sm btn-danger" onclick="runQuickExit()">
+      <i class="fa-solid fa-minus"></i> Vacate Vehicle
+    </button>
+    <button class="btn btn-sm btn-secondary" onclick="loadParkingSlots()">
+      <i class="fa-solid fa-rotate"></i> Refresh
+    </button>
+  </div>
+</div>
+
+<!-- Virtual Parking Lot Canvas Container -->
+<div class="parking-lot-container">
+  
+  <!-- North Entrance Gate Banner -->
+  <div class="lot-gate-banner">
+    <div class="gate-badge">
+      <i class="fa-solid fa-torii-gate" style="color:var(--accent-green); font-size:1.1rem;"></i>
+      <span>ENTRY BARRIER 01</span>
+      <span class="badge badge-available" style="font-size:0.65rem;">GATE OPEN</span>
+    </div>
+
+    <div class="road-arrow">
+      <i class="fa-solid fa-arrow-down"></i> ENTRY DRIVEWAY <i class="fa-solid fa-arrow-down"></i>
+    </div>
+
+    <div style="font-size:0.8rem; color:var(--text-muted);">
+      <i class="fa-solid fa-video" style="color:var(--accent-cyan); margin-right:4px;"></i> CAM-NORTH-ANPR
+    </div>
+  </div>
+
+  <!-- Upper Slots Row (North Wing) -->
+  <div class="slots-grid" id="slotsNorthWing" style="margin-bottom:1.5rem;">
+    <!-- Rendered dynamically -->
+  </div>
+
+  <!-- Central Driveway Asphalt Lane -->
+  <div class="lot-driveway">
+    <div class="road-arrow"><i class="fa-solid fa-arrow-right"></i> SPEED LIMIT 10 KM/H</div>
+    <div class="road-arrow"><i class="fa-solid fa-arrow-right"></i> LANE A</div>
+    <div class="road-arrow"><i class="fa-solid fa-arrow-right"></i> EXIT LANE</div>
+  </div>
+
+  <!-- Lower Slots Row (South Wing: P09-P12, VIP01, EV01, DIS01) -->
+  <div class="slots-grid" id="slotsSouthWing">
+    <!-- Rendered dynamically -->
+  </div>
+
+  <!-- South Exit Gate Banner -->
+  <div class="lot-gate-banner" style="margin-top:1.5rem; margin-bottom:0;">
+    <div class="gate-badge">
+      <i class="fa-solid fa-torii-gate" style="color:var(--accent-red); font-size:1.1rem;"></i>
+      <span>EXIT BARRIER 01</span>
+      <span class="badge badge-occupied" style="font-size:0.65rem;">TOLL TERMINAL</span>
+    </div>
+
+    <div class="road-arrow" style="color:#ef4444;">
+      <i class="fa-solid fa-arrow-down"></i> EXIT LANE <i class="fa-solid fa-arrow-down"></i>
+    </div>
+
+    <div style="font-size:0.8rem; color:var(--text-muted);">
+      <i class="fa-solid fa-video" style="color:var(--accent-cyan); margin-right:4px;"></i> CAM-SOUTH-ANPR
+    </div>
+  </div>
+
+</div>
+
+<!-- Slot Details & Action Modal -->
+<div class="modal-overlay" id="slotDetailModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="slotModalTitle"><i class="fa-solid fa-square-parking"></i> Slot Details</h3>
+      <button class="modal-close" onclick="closeSlotDetailModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="slotModalBody">
+      <!-- Injected by parking.js -->
+    </div>
+    <div class="modal-footer" id="slotModalFooter">
+      <!-- Buttons dynamically assigned -->
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/parking.js') }}"></script>
+{% endblock %}

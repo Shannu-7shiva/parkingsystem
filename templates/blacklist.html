@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Security Blacklist | Smart Parking ANPR{% endblock %}
+{% block page_title %}Security Blacklist Registry{% endblock %}
+{% block page_subtitle %}Flagged Vehicles, Law Enforcement Alerts, and Gate Entry Restrictions{% endblock %}
+
+{% block content %}
+<div style="display:grid; grid-template-columns: 360px 1fr; gap:1.5rem;">
+  
+  <!-- Left Column: Add Vehicle to Blacklist Form -->
+  <div class="card">
+    <div class="section-header">
+      <h2><i class="fa-solid fa-shield-halved" style="color:var(--accent-red);"></i> Flag New Vehicle</h2>
+    </div>
+    <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1.25rem;">
+      Vehicles added here will be denied entry automatically by the ANPR camera and will raise security warnings.
+    </p>
+
+    <form id="addBlacklistForm" onsubmit="submitBlacklistEntry(event)">
+      <div class="form-group">
+        <label class="form-label" for="blPlateInput">License Plate Number</label>
+        <input type="text" id="blPlateInput" class="form-control" placeholder="e.g. DL01ZA9999" required style="text-transform:uppercase; font-family:monospace; font-weight:700;">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="blReasonInput">Reason / Infraction Details</label>
+        <textarea id="blReasonInput" class="form-control" rows="4" placeholder="Reported stolen, repeated toll evasion, unauthorized access..." required></textarea>
+      </div>
+
+      <button type="submit" class="btn btn-danger" style="width:100%;">
+        <i class="fa-solid fa-ban"></i> Add to Security Blacklist
+      </button>
+    </form>
+  </div>
+
+  <!-- Right Column: Blacklist Table -->
+  <div class="card">
+    <div class="section-header">
+      <h2><i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-amber);"></i> Active Blacklisted Vehicles</h2>
+      <span class="badge badge-occupied" id="blCountBadge">0 Flagged</span>
+    </div>
+
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Plate Number</th>
+            <th>Reason / Flag Details</th>
+            <th>Flagged Date</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="blacklistTableBody">
+          <tr>
+            <td colspan="4" style="text-align:center; padding:2rem; color:var(--text-sub);">
+              <i class="fa-solid fa-spinner fa-spin"></i> Loading blacklist entries...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/vehicles.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    fetchBlacklist();
+  });
+</script>
+{% endblock %}
