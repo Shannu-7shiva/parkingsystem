@@ -32,12 +32,15 @@ def configure_logging():
     root_logger = logging.getLogger()
     if not root_logger.handlers:
         root_logger.setLevel(logging.INFO)
-        fh = logging.FileHandler(str(log_file), encoding="utf-8")
-        fh.setFormatter(logging.Formatter(log_format))
         sh = logging.StreamHandler(sys.stdout)
         sh.setFormatter(logging.Formatter(log_format))
-        root_logger.addHandler(fh)
         root_logger.addHandler(sh)
+        try:
+            fh = logging.FileHandler(str(log_file), encoding="utf-8")
+            fh.setFormatter(logging.Formatter(log_format))
+            root_logger.addHandler(fh)
+        except Exception:
+            pass
 
 
 def create_app():
@@ -56,8 +59,11 @@ def create_app():
     app.config["UPLOAD_FOLDER"] = str(config.UPLOAD_FOLDER)
 
     # Initialize DB schema & seed default data if not present
-    init_db()
-    seed_database(reset=False)
+    try:
+        init_db()
+        seed_database(reset=False)
+    except Exception as e:
+        logger.warning(f"Database initialization note: {e}")
 
     # Register Blueprints
     app.register_blueprint(auth_bp)

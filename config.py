@@ -3,7 +3,12 @@ from pathlib import Path
 
 # Base Paths
 BASE_DIR = Path(__file__).resolve().parent
-IS_VERCEL = os.environ.get("VERCEL", "0") == "1"
+IS_VERCEL = (
+    os.environ.get("VERCEL") == "1"
+    or os.environ.get("VERCEL_ENV") is not None
+    or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") is not None
+    or not os.access(str(BASE_DIR), os.W_OK)
+)
 
 if IS_VERCEL:
     STORAGE_DIR = Path("/tmp")
