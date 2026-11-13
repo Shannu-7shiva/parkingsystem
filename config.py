@@ -31,8 +31,8 @@ for folder in [UPLOAD_FOLDER, VEHICLE_UPLOADS, VIDEO_UPLOADS, PLATE_UPLOADS, MOD
 # Flask Configuration
 SECRET_KEY = os.environ.get("SECRET_KEY", "smart-parking-anpr-secret-key-2026-btech-project")
 DEBUG_MODE = os.environ.get("FLASK_DEBUG", "True").lower() in ("true", "1", "yes")
-HOST = "127.0.0.1"
-PORT = 5000
+HOST = os.environ.get("HOST", "0.0.0.0")
+PORT = int(os.environ.get("PORT", 5000))
 
 # Database Configuration
 DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
