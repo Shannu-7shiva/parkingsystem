@@ -1,0 +1,296 @@
+/* Parking Lot Canvas & Layout */
+.parking-lot-container {
+  background: #0d121d;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.6);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Road tarmac markings */
+.lot-driveway {
+  background: #141b29;
+  border-top: 2px dashed #4b5563;
+  border-bottom: 2px dashed #4b5563;
+  height: 60px;
+  margin: 1.5rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  position: relative;
+}
+
+.road-arrow {
+  color: #fbbf24;
+  font-size: 1.5rem;
+  opacity: 0.8;
+  letter-spacing: 2px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lot-gate-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  padding: 0.85rem 1.5rem;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.gate-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent-cyan);
+}
+
+/* Parking Slots Grid */
+.slots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 1.25rem;
+}
+
+/* Individual Parking Slot Card */
+.parking-bay {
+  background: #131a27;
+  border: 2px solid #374151;
+  border-radius: var(--radius-md);
+  padding: 1rem 0.85rem;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  user-select: none;
+}
+
+.parking-bay:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* Bay Status Variations */
+.parking-bay.available {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.05) 0%, rgba(19, 26, 39, 0.9) 100%);
+}
+
+.parking-bay.available:hover {
+  border-color: var(--accent-green);
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.25);
+}
+
+.parking-bay.occupied {
+  border-color: rgba(239, 68, 68, 0.6);
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.08) 0%, rgba(19, 26, 39, 0.95) 100%);
+}
+
+.parking-bay.occupied:hover {
+  border-color: var(--accent-red);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+}
+
+.parking-bay.reserved {
+  border-color: rgba(245, 158, 11, 0.6);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, rgba(19, 26, 39, 0.95) 100%);
+}
+
+.parking-bay.reserved:hover {
+  border-color: var(--accent-amber);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
+}
+
+/* Slot Header */
+.bay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.bay-number {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.04em;
+}
+
+.bay-type-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.tag-normal { background: #374151; color: #d1d5db; }
+.tag-vip { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.4); }
+.tag-ev { background: rgba(6, 182, 212, 0.2); color: #67e8f9; border: 1px solid rgba(6, 182, 212, 0.4); }
+.tag-disabled { background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.4); }
+
+/* Center Visualization (Car or Empty Space) */
+.bay-visual {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+  position: relative;
+}
+
+.empty-slot-guide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-sub);
+  gap: 0.35rem;
+  font-size: 0.75rem;
+}
+
+.empty-slot-guide i {
+  font-size: 1.8rem;
+  color: rgba(16, 185, 129, 0.4);
+}
+
+/* ========================================================
+   2D CSS VEHICLE ILLUSTRATION
+   ======================================================== */
+.css-car {
+  width: 72px;
+  height: 110px;
+  position: relative;
+  animation: car-enter 0.5s ease-out;
+}
+
+@keyframes car-enter {
+  from { transform: translateY(-25px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Main Car Body */
+.car-body {
+  width: 100%;
+  height: 100%;
+  background: #3b82f6; /* Dynamic per vehicle */
+  border-radius: 18px 18px 14px 14px;
+  position: relative;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(0, 0, 0, 0.3);
+}
+
+/* Windshields */
+.car-windshield-front {
+  position: absolute;
+  top: 24px;
+  left: 8px;
+  right: 8px;
+  height: 18px;
+  background: #111827;
+  border-radius: 6px 6px 2px 2px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.car-windshield-rear {
+  position: absolute;
+  bottom: 20px;
+  left: 9px;
+  right: 9px;
+  height: 14px;
+  background: #111827;
+  border-radius: 2px 2px 6px 6px;
+}
+
+/* Car Roof */
+.car-roof {
+  position: absolute;
+  top: 42px;
+  bottom: 34px;
+  left: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
+/* Headlights */
+.car-headlight {
+  position: absolute;
+  top: 3px;
+  width: 12px;
+  height: 8px;
+  background: #fef08a;
+  border-radius: 3px;
+  box-shadow: 0 -2px 8px #fef08a;
+}
+.car-headlight.left { left: 8px; }
+.car-headlight.right { right: 8px; }
+
+/* Taillights */
+.car-taillight {
+  position: absolute;
+  bottom: 3px;
+  width: 12px;
+  height: 6px;
+  background: #ef4444;
+  border-radius: 2px;
+  box-shadow: 0 2px 6px #ef4444;
+}
+.car-taillight.left { left: 8px; }
+.car-taillight.right { right: 8px; }
+
+/* Side Mirrors */
+.car-mirror {
+  position: absolute;
+  top: 30px;
+  width: 6px;
+  height: 10px;
+  background: inherit;
+  border-radius: 2px;
+}
+.car-mirror.left { left: -5px; }
+.car-mirror.right { right: -5px; }
+
+/* Bay Footer with Plate and Time */
+.bay-footer {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.bay-plate-text {
+  background: #ffffff;
+  color: #000000;
+  font-family: monospace;
+  font-weight: 800;
+  font-size: 0.75rem;
+  padding: 3px 6px;
+  border-radius: 4px;
+  text-align: center;
+  border: 1px solid #1f2937;
+  letter-spacing: 0.05em;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.bay-meta-time {
+  font-size: 0.7rem;
+  color: var(--text-sub);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
