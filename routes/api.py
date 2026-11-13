@@ -212,6 +212,78 @@ def process_anpr_media():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@api_bp.route("/anpr/debug-pipeline", methods=["POST"])
+@login_required
+def debug_anpr_pipeline():
+    """
+    Dedicated Computer Vision Debugging API:
+    Returns full preprocessing pipeline inspection: original crop, deskewed crop,
+    all 5 filtered variants in base64, candidate ranking, and multi-frame voting simulation.
+    """
+    import base64
+    from anpr.image_processor import ImageProcessor
+    from anpr.ocr_engine import OCREngine
+    from anpr.plate_processor import PlateProcessor
+    from anpr.plate_detector import PlateDetector
+
+    try:
+        if "file" not in request.files:
+            return jsonify({"success": False, "message": "No image file uploaded."}), 400
+
+        file = request.files["file"]
+        file_bytes = np.frombuffer(file.read(), np.uint8)
+        frame = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+        if frame is None:
+            return jsonify({"success": False, "message": "Invalid image payload."}), 400
+
+        # Step 1: Detect Plate
+        plates = PlateDetector.detect_plates(frame)
+        if plates:
+            plate_box = plates[0]["bbox"]
+            plate_crop = ImageProcessor.crop_with_padding(frame, plate_box)
+        else:
+            plate_box = (0, 0, frame.shape[1], frame.shape[0])
+            plate_crop = frame.copy()
+
+        # Step 2: Perspective Deskewing
+        deskewed = ImageProcessor.correct_perspective_and_deskew(plate_crop)
+        sharpness = ImageProcessor.calculate_sharpness(deskewed)
+
+        # Step 3: Preprocessing Variants
+        variants = ImageProcessor.generate_preprocessing_variants(deskewed)
+
+        def img_to_b64(img_arr):
+            if img_arr is None or img_arr.size == 0:
+                return ""
+            _, buf = cv2.imencode(".jpg", img_arr)
+            return "data:image/jpeg;base64," + base64.b64encode(buf).decode("utf-8")
+
+        variant_previews = {name: img_to_b64(img) for name, img in variants.items()}
+
+        # Step 4: Run Multi-Variant OCR Extraction
+        ocr_result = OCREngine.recognize_plate_text(deskewed)
+
+        # Step 5: Indian Plate Syntax Disambiguation
+        disambiguated, val_details = PlateProcessor.disambiguate_indian_plate(
+            ocr_result.get("cleaned_plate") or ocr_result.get("raw_text") or ""
+        )
+
+        return jsonify({
+            "success": True,
+            "sharpness": round(sharpness, 1),
+            "plate_detected": len(plates) > 0,
+            "plate_bbox": list(plate_box),
+            "original_crop_b64": img_to_b64(plate_crop),
+            "deskewed_b64": img_to_b64(deskewed),
+            "variants": variant_previews,
+            "ocr_output": ocr_result,
+            "resolved_plate": disambiguated,
+            "validation": val_details
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 # ----------------------------------------------------
 # 5. Vehicles & Parking History Endpoints
 # ----------------------------------------------------

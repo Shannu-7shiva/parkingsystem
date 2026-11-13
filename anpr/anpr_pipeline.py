@@ -12,6 +12,8 @@ from anpr.vehicle_detector import VehicleDetector
 from anpr.plate_detector import PlateDetector
 from anpr.ocr_engine import OCREngine, get_easyocr_reader
 from anpr.plate_processor import PlateProcessor
+from anpr.image_processor import ImageProcessor
+from anpr.multi_frame_tracker import global_multi_frame_tracker
 from parking.parking_service import ParkingService
 
 logger = logging.getLogger("anpr.pipeline")
@@ -36,8 +38,10 @@ def make_json_serializable(data: Any) -> Any:
 
 class ANPRPipeline:
     """
-    End-to-End Automatic Number Plate Recognition and Parking Integration Pipeline.
-    Optimized for high-speed processing with automatic frame scaling and telemetry.
+    State-of-the-Art Automatic Number Plate Recognition and Parking Integration Pipeline.
+    Combines YOLO vehicle detection, morphological/YOLO plate localization,
+    padding expansion, perspective deskewing, multi-variant OCR, Indian statutory syntax
+    disambiguation, multi-frame consensus voting, and duplicate entry prevention.
     """
 
     @classmethod
@@ -48,11 +52,13 @@ class ANPRPipeline:
         force_action: Optional[str] = None,
         override_plate_text: Optional[str] = None,
         auto_parking_trigger: bool = True,
-        preferred_vehicle_type: Optional[str] = None
+        preferred_vehicle_type: Optional[str] = None,
+        enable_multi_frame: bool = True
     ) -> Dict[str, Any]:
         """
         Executes complete ANPR cycle on a video frame or image:
-        Frame -> Vehicle Detection -> Plate Detection -> OCR -> Validation -> Parking Action
+        Frame -> Vehicle Detection -> Padded Plate Crop -> Perspective Correction ->
+        Multi-Variant OCR -> Syntactic Disambiguation -> Multi-Frame Voting -> Gatekeeper Parking Action
         """
         start_total = time.perf_counter()
 
@@ -74,9 +80,7 @@ class ANPRPipeline:
             detection_frame = cv2.resize(frame, (1280, new_h), interpolation=cv2.INTER_LINEAR)
 
         # Step 1: Detect Vehicles
-        t0 = time.perf_counter()
         vehicles = VehicleDetector.detect_vehicles(detection_frame)
-        # Rescale bboxes back if scaled
         if scale_ratio != 1.0 and vehicles:
             for v in vehicles:
                 bx1, by1, bx2, by2 = v["bbox"]
@@ -88,7 +92,7 @@ class ANPRPipeline:
                 )
 
         primary_vehicle = vehicles[0] if vehicles else None
-        
+
         # Vehicle type resolution: manual preference or vision detection
         norm_pref = (preferred_vehicle_type or "").strip().lower()
         if norm_pref in ("motorcycle", "bike", "scooter", "two-wheeler", "two_wheeler"):
@@ -106,7 +110,7 @@ class ANPRPipeline:
 
         if primary_vehicle:
             primary_vehicle["class_name"] = vehicle_type
-            
+
         vehicle_bbox = primary_vehicle["bbox"] if primary_vehicle else None
 
         if vehicles:
@@ -120,7 +124,9 @@ class ANPRPipeline:
         )
         primary_plate = plates[0] if plates else None
 
-        # Step 3 & 4: OCR & Plate Validation
+        # Step 3: Padded Cropping & Perspective Deskewing
+        plate_crop_path = None
+        sharpness_score = 100.0
         ocr_result = {
             "raw_text": "",
             "cleaned_plate": "",
@@ -130,108 +136,64 @@ class ANPRPipeline:
             "processing_time_ms": 0.0
         }
 
-        plate_crop_path = None
-        if primary_plate and primary_plate["crop"] is not None and primary_plate["crop"].size > 0:
-            crop = primary_plate["crop"]
-            # Save plate crop to disk
+        if primary_plate and primary_plate.get("bbox") is not None:
+            bbox = primary_plate["bbox"]
+            # Crop with adaptive safety padding to avoid character boundary clipping
+            crop_padded = ImageProcessor.crop_with_padding(frame, bbox, pad_x_pct=0.08, pad_y_pct=0.12)
+            # Deskew and correct perspective tilt
+            deskewed_crop = ImageProcessor.correct_perspective_and_deskew(crop_padded)
+            sharpness_score = ImageProcessor.calculate_sharpness(deskewed_crop)
+
+            # Save clean plate crop preview to disk
             crop_filename = f"plate_{uuid.uuid4().hex[:8]}.jpg"
             crop_file_path = config.PLATE_UPLOADS / crop_filename
-            cv2.imwrite(str(crop_file_path), crop)
+            cv2.imwrite(str(crop_file_path), deskewed_crop)
             plate_crop_path = f"/uploads/plates/{crop_filename}"
+            primary_plate["crop"] = deskewed_crop
+
+            ocr_result = OCREngine.recognize_plate_text(deskewed_crop)
 
             if override_plate_text:
-                # User provided or demo simulation override
                 val = PlateProcessor.validate_and_format(override_plate_text)
-                ocr_result = {
-                    "raw_text": override_plate_text,
-                    "cleaned_plate": val["cleaned_plate"],
-                    "confidence": 0.98,
-                    "valid": val["valid"],
-                    "details": val,
-                    "engine": "Simulation / High-Speed Stream",
-                    "processing_time_ms": 1.2
-                }
-            else:
-                ocr_result = OCREngine.recognize_plate_text(crop)
+                if val.get("valid") or not ocr_result.get("valid"):
+                    ocr_result = {
+                        "raw_text": override_plate_text,
+                        "cleaned_plate": val["cleaned_plate"],
+                        "confidence": 0.98 if val["valid"] else 0.70,
+                        "valid": val["valid"],
+                        "details": val,
+                        "engine": "Client-AI / Manual Input",
+                        "processing_time_ms": 1.0
+                    }
 
-        # Full-view AI search fallback: if morphological detection didn't find a valid plate
-        if not ocr_result.get("valid") and not override_plate_text:
-            reader = get_easyocr_reader()
-            if reader:
-                try:
-                    fh, fw = frame.shape[:2]
-                    scale = 480.0 / max(fh, fw) if max(fh, fw) > 480 else 1.0
-                    scan_img = cv2.resize(frame, (int(fw * scale), int(fh * scale))) if scale != 1.0 else frame
+        # Step 4: Multi-Frame Temporal Consensus & Voting
+        gate_channel = (force_action or "ENTRY").upper()
+        single_plate = ocr_result.get("cleaned_plate") or ocr_result.get("raw_text") or ""
+        single_conf = float(ocr_result.get("confidence", 0.0))
 
-                    # 1. Run paragraph=True first (combines horizontally adjacent plate chunks like "TG" + "03 A" + "7349")
-                    easy_results = reader.readtext(scan_img, paragraph=True)
-                    # If not found, also try paragraph=False
-                    if not easy_results:
-                        easy_results = reader.readtext(scan_img, paragraph=False)
+        consensus_info = {
+            "consensus_plate": single_plate,
+            "confidence": single_conf,
+            "status": "SINGLE_FRAME",
+            "is_confident": ocr_result.get("valid", False) and single_conf >= 0.85,
+            "frames_count": 1
+        }
 
-                    found_candidate = False
-                    for item in easy_results:
-                        box = item[0]
-                        text = item[1]
-                        conf = float(item[2]) if len(item) > 2 else 0.88
-                        clean = PlateProcessor.clean_raw_text(text)
-                        corr = PlateProcessor.correct_ocr_characters(clean)
-                        val = PlateProcessor.validate_and_format(corr)
-                        if val["valid"] or (len(corr) >= 6 and re.search(r'\d{2,4}', corr)):
-                            pts = np.array(box, dtype=np.float32)
-                            if scale != 1.0:
-                                pts /= scale
-                            min_x = max(0, int(np.min(pts[:, 0])))
-                            min_y = max(0, int(np.min(pts[:, 1])))
-                            max_x = min(fw, int(np.max(pts[:, 0])))
-                            max_y = min(fh, int(np.max(pts[:, 1])))
-                            full_crop = frame[min_y:max_y, min_x:max_x]
-                            if full_crop.size > 0:
-                                crop_filename = f"plate_{uuid.uuid4().hex[:8]}.jpg"
-                                crop_file_path = config.PLATE_UPLOADS / crop_filename
-                                cv2.imwrite(str(crop_file_path), full_crop)
-                                plate_crop_path = f"/uploads/plates/{crop_filename}"
-                            primary_plate = {
-                                "bbox": (min_x, min_y, max_x, max_y),
-                                "crop": full_crop,
-                                "confidence": float(conf),
-                                "method": "Full-View AI"
-                            }
-                            plate_str = val["cleaned_plate"] if val["valid"] else corr
-                            ocr_result = {
-                                "raw_text": text,
-                                "cleaned_plate": plate_str,
-                                "confidence": float(conf),
-                                "valid": True,
-                                "details": val,
-                                "engine": "EasyOCR Full-View AI",
-                                "processing_time_ms": 15.0
-                            }
-                            found_candidate = True
-                            break
+        if enable_multi_frame and len(single_plate) >= 5:
+            consensus_info = global_multi_frame_tracker.add_reading(
+                gate_id=gate_channel,
+                plate_text=single_plate,
+                raw_text=ocr_result.get("raw_text", single_plate),
+                confidence=single_conf,
+                sharpness=sharpness_score,
+                crop_url=plate_crop_path
+            )
 
-                    # If still not found, try merging all alphanumeric chunks
-                    if not found_candidate and len(easy_results) >= 2:
-                        merged = " ".join(it[1] for it in easy_results)
-                        clean = PlateProcessor.clean_raw_text(merged)
-                        corr = PlateProcessor.correct_ocr_characters(clean)
-                        val = PlateProcessor.validate_and_format(corr)
-                        if val["valid"] or (len(corr) >= 6 and re.search(r'\d{2,4}', corr)):
-                            plate_str = val["cleaned_plate"] if val["valid"] else corr
-                            ocr_result = {
-                                "raw_text": merged,
-                                "cleaned_plate": plate_str,
-                                "confidence": 0.85,
-                                "valid": True,
-                                "details": val,
-                                "engine": "EasyOCR Merged AI",
-                                "processing_time_ms": 20.0
-                            }
-                except Exception as e:
-                    logger.debug(f"Full-frame OCR search error: {e}")
+        detected_plate_number = consensus_info.get("consensus_plate") or single_plate
+        consensus_confidence = consensus_info.get("confidence") or single_conf
+        recognition_status = consensus_info.get("status", "SINGLE_FRAME")
 
-        # Step 5: Annotation with recognized plate
-        detected_plate_number = ocr_result.get("cleaned_plate") or ocr_result.get("raw_text")
+        # Step 5: Vehicle Registry Enrichment
         owner_name = "Guest / Visitor"
         vehicle_model = "Vehicle"
 
@@ -247,40 +209,85 @@ class ANPRPipeline:
                         vehicle_model = v_rec.model or "Vehicle"
                         if not preferred_vehicle_type or preferred_vehicle_type.lower() in ("auto", "auto-detect", "detect", "none", ""):
                             vehicle_type = v_rec.vehicle_type
-                    else:
-                        m = re.match(r'^([A-Z]{2})(\d{1,2})([A-Z]{1,3})?(\d{1,4})$', v_clean)
-                        if m and (not preferred_vehicle_type or preferred_vehicle_type.lower() in ("auto", "auto-detect", "detect", "none", "")):
-                            st, rto, ser, num = m.groups()
-                            ser = ser or ""
-                            if len(ser) == 1 and ser in "ABCDE":
-                                vehicle_type = "motorcycle"
-                            elif len(ser) >= 2 or (len(ser) == 1 and ser in "XYZ"):
-                                vehicle_type = "car"
             except Exception as e:
-                logger.debug(f"Vehicle registry lookup error: {e}")
+                logger.debug(f"Vehicle registry lookup notice: {e}")
 
+        # Step 6: Visual HUD Annotation
         if primary_plate:
             annotated_frame = PlateDetector.draw_plates(
                 annotated_frame,
                 [primary_plate],
-                plate_text=detected_plate_number
+                plate_text=f"{detected_plate_number} ({int(consensus_confidence * 100)}%)"
             )
 
-        # Save annotated snapshot to uploads/vehicles
         snap_filename = f"snap_{uuid.uuid4().hex[:8]}.jpg"
         snap_path = config.VEHICLE_UPLOADS / snap_filename
         cv2.imwrite(str(snap_path), annotated_frame)
         saved_snap_url = f"/uploads/vehicles/{snap_filename}"
 
-        # Step 6: Trigger Parking Management Action
+        # Step 7: Gatekeeper & Incorrect Vehicle Entry Prevention
+        # Conditions:
+        # 1. Duplicate Suppression: Check if same vehicle already registered within last 60s
+        # 2. Confidence Tiering:
+        #    - HIGH (>= 0.85 & Valid): Auto-process parking entry/exit
+        #    - MEDIUM (0.60 - 0.84): Flag for operator review
+        #    - LOW (< 0.60): Reject database entry, display "PLATE RECOGNITION UNCERTAIN - PLEASE VERIFY"
         parking_result = None
-        if auto_parking_trigger and detected_plate_number and len(detected_plate_number) >= 5:
-            parking_result = ParkingService.process_plate_event(
-                plate_number=detected_plate_number,
-                vehicle_type=vehicle_type,
-                image_path=saved_snap_url,
-                force_action=force_action
+        action_allowed = False
+        status_message = "Ready"
+
+        is_duplicate = False
+        if not override_plate_text and detected_plate_number and len(detected_plate_number) >= 5:
+            is_duplicate = global_multi_frame_tracker.is_duplicate_event(
+                gate_id=gate_channel, plate=detected_plate_number, cooldown_seconds=60.0
             )
+
+        if is_duplicate:
+            parking_result = {
+                "success": True,
+                "action": "DUPLICATE_SUPPRESSED",
+                "plate_number": detected_plate_number,
+                "barrier_status": "CLOSED",
+                "message": f"Vehicle {detected_plate_number} was already processed at this gate. Duplicate entry suppressed."
+            }
+            status_message = "DUPLICATE ENTRY COOLED DOWN"
+        elif auto_parking_trigger and detected_plate_number and len(detected_plate_number) >= 5:
+            # Check validation confidence
+            if consensus_confidence >= 0.82 and ocr_result.get("valid", True):
+                # High confidence -> allow automatic gate barrier and database entry
+                parking_result = ParkingService.process_plate_event(
+                    plate_number=detected_plate_number,
+                    vehicle_type=vehicle_type,
+                    image_path=saved_snap_url,
+                    force_action=force_action
+                )
+                if parking_result.get("success"):
+                    global_multi_frame_tracker.mark_finalized(gate_channel, detected_plate_number)
+                status_message = "AUTOMATIC ENTRY PASS"
+            elif consensus_confidence >= 0.60:
+                # Medium confidence -> require confirmation
+                parking_result = {
+                    "success": False,
+                    "requires_confirmation": True,
+                    "action": "CONFIRM_REQUIRED",
+                    "plate_number": detected_plate_number,
+                    "barrier_status": "CLOSED",
+                    "confidence": consensus_confidence,
+                    "message": f"Plate {detected_plate_number} detected with moderate confidence ({int(consensus_confidence*100)}%). Please verify."
+                }
+                status_message = "CONFIRMATION REQUIRED"
+            else:
+                # Low confidence -> Reject database mutation
+                parking_result = {
+                    "success": False,
+                    "requires_confirmation": False,
+                    "action": "REJECTED_UNCERTAIN",
+                    "plate_number": detected_plate_number,
+                    "barrier_status": "CLOSED",
+                    "confidence": consensus_confidence,
+                    "message": "PLATE RECOGNITION UNCERTAIN - PLEASE VERIFY"
+                }
+                status_message = "PLATE RECOGNITION UNCERTAIN - PLEASE VERIFY"
 
         total_latency_ms = round((time.perf_counter() - start_total) * 1000, 2)
 
@@ -299,11 +306,18 @@ class ANPRPipeline:
             "annotated_image_url": saved_snap_url,
             "ocr": {
                 "raw_text": ocr_result["raw_text"],
-                "cleaned_plate": ocr_result["cleaned_plate"],
-                "confidence": ocr_result["confidence"],
+                "cleaned_plate": detected_plate_number,
+                "confidence": consensus_confidence,
                 "valid": ocr_result["valid"],
                 "engine": ocr_result["engine"],
                 "ocr_time_ms": ocr_result.get("processing_time_ms", 0.0)
+            },
+            "multi_frame": {
+                "frames_aggregated": consensus_info.get("frames_count", 1),
+                "total_buffered": consensus_info.get("total_frames_buffered", 1),
+                "status": recognition_status,
+                "status_message": status_message,
+                "sharpness": round(sharpness_score, 1)
             },
             "parking_action": parking_result,
             "latency_ms": total_latency_ms

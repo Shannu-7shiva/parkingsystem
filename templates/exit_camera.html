@@ -92,12 +92,24 @@
           </div>
         </div>
 
-        <div style="margin-top:1rem; display:flex; gap:0.75rem;">
-          <button class="btn btn-danger" onclick="exitCaptureAndProcess()">
-            <i class="fa-solid fa-camera"></i> Capture & Process
+        <!-- Camera Controls: Selector for Mobile (Front / Back) & Actions -->
+        <div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; justify-content:center; width:100%;">
+          <div style="display:flex; align-items:center; gap:0.4rem; background:rgba(15,23,42,0.8); border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:3px 8px;">
+            <i class="fa-solid fa-camera-rotate" style="color:var(--accent-red); font-size:0.85rem;"></i>
+            <select id="exitCameraFacingSelect" style="background:transparent; color:#f8fafc; border:none; outline:none; font-size:0.82rem; cursor:pointer;" onchange="exitSwitchCameraFacing(this.value)">
+              <option value="environment" style="background:#0f172a; color:#fff;" selected>📷 Back Camera (Rear)</option>
+              <option value="user" style="background:#0f172a; color:#fff;">🤳 Front Camera (Selfie)</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="exitToggleCameraFacing()" title="Flip Front/Back" style="padding:2px 8px; font-size:0.78rem;">
+              <i class="fa-solid fa-arrows-rotate"></i> Flip
+            </button>
+          </div>
+
+          <button class="btn btn-danger btn-sm" onclick="exitCaptureAndProcess()" style="padding:6px 14px;">
+            <i class="fa-solid fa-camera"></i> Scan Exit
           </button>
-          <button class="btn btn-secondary" onclick="exitStartWebcam()">
-            <i class="fa-solid fa-rotate"></i> Restart Camera
+          <button class="btn btn-secondary btn-sm" onclick="exitStartWebcam()" style="padding:6px 14px;">
+            <i class="fa-solid fa-rotate"></i> Restart
           </button>
         </div>
       </div>
@@ -192,6 +204,21 @@
         <div style="display:flex; justify-content:space-between; border-top:1px solid var(--border-color); padding-top:0.5rem; margin-top:0.25rem;">
           <span style="color:var(--text-muted);">Total Amount:</span>
           <strong id="exitAmount" style="color:#22c55e; font-size:1.2rem;">₹--</strong>
+        </div>
+
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:var(--text-muted);">Multi-Frame AI:</span>
+          <strong id="exitMultiFrameStatus" style="font-size:0.8rem; color:var(--accent-cyan);">Active (Voting)</strong>
+        </div>
+      </div>
+
+      <!-- Live Exit Recognition History -->
+      <div style="margin-top:0.75rem; border-top:1px solid var(--border-color); padding-top:0.75rem;">
+        <div style="font-size:0.75rem; color:var(--text-sub); text-transform:uppercase; margin-bottom:0.4rem; font-weight:700;">
+          <i class="fa-solid fa-clock-rotate-left"></i> Live Exit Stream:
+        </div>
+        <div id="exitLiveRecHistory" style="max-height:80px; overflow-y:auto; display:flex; flex-direction:column; gap:0.25rem; font-size:0.78rem; font-family:monospace;">
+          <div style="color:var(--text-muted);">Awaiting vehicle checkout...</div>
         </div>
       </div>
 

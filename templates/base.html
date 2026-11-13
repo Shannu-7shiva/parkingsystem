@@ -72,6 +72,10 @@
           <i class="fa-solid fa-sliders"></i>
           <span>Settings</span>
         </a>
+        <a href="{{ url_for('dashboard_views.anpr_debugger') }}" class="nav-link {% if request.path == '/anpr-debugger' %}active{% endif %}">
+          <i class="fa-solid fa-microscope"></i>
+          <span>ANPR Debugger</span>
+        </a>
       </nav>
 
       <div class="sidebar-footer">

@@ -31,3 +31,9 @@ def exit_camera():
 @login_required
 def parking_lot():
     return render_template("parking_lot.html")
+
+
+@dashboard_views_bp.route("/anpr-debugger")
+@login_required
+def anpr_debugger():
+    return render_template("anpr_debugger.html")

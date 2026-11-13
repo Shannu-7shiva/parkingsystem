@@ -74,22 +74,53 @@ function setExitVehicleTypePref(type) {
   showToast(`Exit vehicle mode: ${label}`, 'info');
 }
 
-// ----- Webcam -----
+// ----- Mobile Facing Mode & Webcam -----
+let exitCurrentFacingMode = 'environment';
+
+function exitSwitchCameraFacing(facing) {
+  exitCurrentFacingMode = facing;
+  const sel = document.getElementById('exitCameraFacingSelect');
+  if (sel) sel.value = facing;
+  showToast(`Switching to ${facing === 'environment' ? 'Back/Rear' : 'Front'} Camera...`, 'info');
+  exitStartWebcam();
+}
+
+function exitToggleCameraFacing() {
+  const next = exitCurrentFacingMode === 'environment' ? 'user' : 'environment';
+  exitSwitchCameraFacing(next);
+}
+
 async function exitStartWebcam() {
   const video = document.getElementById('exitWebcamElement');
   const errBox = document.getElementById('exitWebcamError');
   if (errBox) errBox.style.display = 'none';
 
   try {
-    if (exitWebcamStream) exitWebcamStream.getTracks().forEach(t => t.stop());
+    if (exitWebcamStream) {
+      exitWebcamStream.getTracks().forEach(t => t.stop());
+      exitWebcamStream = null;
+    }
+
+    const constraints = {
+      video: {
+        facingMode: { ideal: exitCurrentFacingMode },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    };
 
     try {
-      exitWebcamStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false
-      });
+      exitWebcamStream = await navigator.mediaDevices.getUserMedia(constraints);
     } catch (e1) {
-      exitWebcamStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      try {
+        exitWebcamStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: exitCurrentFacingMode },
+          audio: false
+        });
+      } catch (e2) {
+        exitWebcamStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
     }
 
     if (video) {
@@ -99,7 +130,8 @@ async function exitStartWebcam() {
       video.setAttribute('muted', '');
       await video.play().catch(e => console.log('Autoplay:', e));
     }
-    showToast('📷 Exit AI Camera Active – Continuous Auto-Scan Live', 'success');
+    const label = exitCurrentFacingMode === 'environment' ? 'Back / Rear Camera' : 'Front Camera';
+    showToast(`📷 Exit ${label} Active – Continuous ANPR Live`, 'success');
     exitStartAutoScan();
     return true;
   } catch (err) {
@@ -187,16 +219,43 @@ async function exitCaptureSilent() {
       const latEl = document.getElementById('exitLatencyDisplay');
       if (latEl) latEl.innerText = `${latency} ms`;
 
-      if (json.success && json.ocr && json.ocr.cleaned_plate && json.ocr.cleaned_plate.length >= 5) {
-        const plate = json.ocr.cleaned_plate;
-        if (plate !== exitLastPlate) {
+      if (json.plate_crop_url) {
+        const cropImg = document.getElementById('exitPlateCropImg');
+        const cropPlaceholder = document.getElementById('exitPlateCropPlaceholder');
+        if (cropImg && cropPlaceholder) {
+          cropImg.src = json.plate_crop_url + '?t=' + Date.now();
+          cropImg.style.display = 'block';
+          cropPlaceholder.style.display = 'none';
+        }
+      }
+
+      const ocr = json.ocr || {};
+      const plateText = ocr.cleaned_plate || ocr.raw_text;
+      const confidence = Math.round((ocr.confidence || 0) * 100);
+
+      if (plateText) {
+        const pDisp = document.getElementById('exitDetectedPlateDisplay');
+        if (pDisp) pDisp.innerText = plateText;
+        const rDisp = document.getElementById('exitRawOcrText');
+        if (rDisp) rDisp.innerText = ocr.raw_text || plateText;
+        const cDisp = document.getElementById('exitOcrConfidenceText');
+        if (cDisp) cDisp.innerText = `${confidence}%`;
+        const cBar = document.getElementById('exitConfidenceBar');
+        if (cBar) cBar.style.width = `${confidence}%`;
+        const engDisp = document.getElementById('exitPipelineEngineText');
+        if (engDisp) engDisp.innerText = ocr.engine || 'AI Multi-Variant';
+      }
+
+      if (json.success && ocr && plateText && plateText.length >= 6) {
+        const plate = ocr.cleaned_plate || plateText;
+        if (plate !== exitLastPlate && (ocr.valid || confidence >= 65)) {
           exitLastPlate = plate;
           exitAutoScanPaused = true;
           exitHandlePipelineResponse(json);
           setTimeout(() => {
             exitAutoScanPaused = false;
             exitLastPlate = null;
-          }, 9000);
+          }, 4500);
         }
       }
     } catch (e) {
@@ -401,6 +460,31 @@ function exitHandlePipelineResponse(json) {
     const plateDisp = document.getElementById('exitPlateDisplay');
     if (plateDisp) plateDisp.innerText = plate || '-- NO PLATE --';
 
+    // Multi-frame & sharpness telemetry
+    const mf = json.multi_frame || {};
+    const mfEl = document.getElementById('exitMultiFrameStatus');
+    if (mfEl) {
+      const fCount = mf.frames_aggregated || 1;
+      mfEl.innerText = `${fCount} frame${fCount > 1 ? 's' : ''} voted (${mf.sharpness || 0} var)`;
+    }
+
+    // Live stream update
+    const conf = Math.round(((json.ocr && json.ocr.confidence) || 0) * 100);
+    const histEl = document.getElementById('exitLiveRecHistory');
+    if (histEl && plate && plate !== '--') {
+      const timeStr = new Date().toLocaleTimeString();
+      const item = document.createElement('div');
+      item.style.display = 'flex';
+      item.style.justifyContent = 'space-between';
+      item.style.color = conf >= 80 ? '#22c55e' : (conf >= 60 ? '#f59e0b' : '#ef4444');
+      item.innerHTML = `<span>${timeStr} <strong>${plate}</strong></span><span>${conf}%</span>`;
+      if (histEl.children.length === 1 && histEl.children[0].innerText.includes('Awaiting')) {
+        histEl.innerHTML = '';
+      }
+      histEl.prepend(item);
+      if (histEl.children.length > 5) histEl.removeChild(histEl.lastChild);
+    }
+
     // Plate crop
     const cropImg = document.getElementById('exitPlateCrop');
     const cropPlace = document.getElementById('exitCropPlaceholder');
@@ -415,6 +499,11 @@ function exitHandlePipelineResponse(json) {
     if (ownerEl) ownerEl.innerText = json.owner_name || (action && action.owner_name) || 'Visitor';
     const modelEl = document.getElementById('exitVehicleModel');
     if (modelEl) modelEl.innerText = json.vehicle_model || (action && action.vehicle_model) || 'Vehicle';
+
+    // Low confidence notification
+    if (conf > 0 && conf < 60) {
+      showToast('PLATE RECOGNITION UNCERTAIN - PLEASE VERIFY', 'warning');
+    }
   }
 
   // Parking action

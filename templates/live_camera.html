@@ -100,12 +100,24 @@
           <strong>Camera Unavailable:</strong> Laptop webcam not detected or permission denied. Please use <strong>Upload Media</strong> or <strong>Simulation Feed</strong> mode.
         </div>
 
-        <div style="margin-top:1rem; display:flex; gap:0.75rem;">
-          <button class="btn btn-primary" id="btnCaptureFrame" onclick="captureAndProcessFrame()">
-            <i class="fa-solid fa-crosshairs"></i> Capture & Process Plate
+        <!-- Camera Controls: Selector for Mobile (Front / Back) & Actions -->
+        <div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; justify-content:center; width:100%;">
+          <div style="display:flex; align-items:center; gap:0.4rem; background:rgba(15,23,42,0.8); border:1px solid rgba(56,189,248,0.3); border-radius:6px; padding:3px 8px;">
+            <i class="fa-solid fa-camera-rotate" style="color:var(--accent-cyan); font-size:0.85rem;"></i>
+            <select id="cameraFacingSelect" style="background:transparent; color:#f8fafc; border:none; outline:none; font-size:0.82rem; cursor:pointer;" onchange="switchCameraFacing(this.value)">
+              <option value="environment" style="background:#0f172a; color:#fff;" selected>📷 Back Camera (Rear)</option>
+              <option value="user" style="background:#0f172a; color:#fff;">🤳 Front Camera (Selfie)</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="toggleCameraFacing()" title="Flip Front/Back" style="padding:2px 8px; font-size:0.78rem;">
+              <i class="fa-solid fa-arrows-rotate"></i> Flip
+            </button>
+          </div>
+
+          <button class="btn btn-primary btn-sm" id="btnCaptureFrame" onclick="captureAndProcessFrame()" style="padding:6px 14px;">
+            <i class="fa-solid fa-crosshairs"></i> Scan Now
           </button>
-          <button class="btn btn-secondary" onclick="startWebcam()">
-            <i class="fa-solid fa-rotate"></i> Restart Camera
+          <button class="btn btn-secondary btn-sm" onclick="startWebcam()" style="padding:6px 14px;">
+            <i class="fa-solid fa-rotate"></i> Restart
           </button>
         </div>
       </div>
@@ -216,6 +228,21 @@
         <div style="display:flex; justify-content:space-between;">
           <span style="color:var(--text-muted);">Pipeline Engine:</span>
           <strong id="pipelineEngineText" style="font-size:0.75rem; color:var(--text-sub);">YOLO + OCR</strong>
+        </div>
+
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:var(--text-muted);">Multi-Frame AI:</span>
+          <strong id="multiFrameStatusText" style="font-size:0.8rem; color:var(--accent-cyan);">Active (Voting)</strong>
+        </div>
+      </div>
+
+      <!-- Live Recognition History -->
+      <div style="margin-top:0.75rem; border-top:1px solid var(--border-color); padding-top:0.75rem;">
+        <div style="font-size:0.75rem; color:var(--text-sub); text-transform:uppercase; margin-bottom:0.4rem; font-weight:700;">
+          <i class="fa-solid fa-clock-rotate-left"></i> Live Recognition Stream:
+        </div>
+        <div id="liveRecHistory" style="max-height:80px; overflow-y:auto; display:flex; flex-direction:column; gap:0.25rem; font-size:0.78rem; font-family:monospace;">
+          <div style="color:var(--text-muted);">Awaiting vehicle scans...</div>
         </div>
       </div>
 

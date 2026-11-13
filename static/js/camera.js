@@ -105,6 +105,21 @@ function switchMode(mode) {
   }
 }
 
+let currentFacingMode = 'environment';
+
+function switchCameraFacing(facing) {
+  currentFacingMode = facing;
+  const sel = document.getElementById('cameraFacingSelect');
+  if (sel) sel.value = facing;
+  showToast(`Switching to ${facing === 'environment' ? 'Back/Rear' : 'Front'} Camera...`, 'info');
+  startWebcam();
+}
+
+function toggleCameraFacing() {
+  const next = currentFacingMode === 'environment' ? 'user' : 'environment';
+  switchCameraFacing(next);
+}
+
 async function startWebcam() {
   const video = document.getElementById('webcamElement');
   const errorBox = document.getElementById('webcamErrorAlert');
@@ -113,15 +128,29 @@ async function startWebcam() {
   try {
     if (webcamStream) {
       webcamStream.getTracks().forEach(track => track.stop());
+      webcamStream = null;
     }
 
+    const constraints = {
+      video: {
+        facingMode: { ideal: currentFacingMode },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    };
+
     try {
-      webcamStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false
-      });
+      webcamStream = await navigator.mediaDevices.getUserMedia(constraints);
     } catch (e1) {
-      webcamStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      try {
+        webcamStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: currentFacingMode },
+          audio: false
+        });
+      } catch (e2) {
+        webcamStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
     }
 
     if (video) {
@@ -131,7 +160,8 @@ async function startWebcam() {
       video.setAttribute('muted', '');
       await video.play().catch(e => console.log('Autoplay:', e));
     }
-    showToast('📷 Entry AI Camera Active – Continuous Auto-Scan Live', 'success');
+    const label = currentFacingMode === 'environment' ? 'Back / Rear Camera' : 'Front Camera';
+    showToast(`📷 ${label} Active – Continuous ANPR Live`, 'success');
     startAutoScan();
     return true;
   } catch (err) {
@@ -328,12 +358,51 @@ function handlePipelineResponse(json) {
     cropPlaceholder.style.display = 'none';
   }
 
+  // Multi-frame & sharpness telemetry
+  const mf = json.multi_frame || {};
+  const mfEl = document.getElementById('multiFrameStatusText');
+  if (mfEl) {
+    const fCount = mf.frames_aggregated || 1;
+    mfEl.innerText = `${fCount} frame${fCount > 1 ? 's' : ''} voted (${mf.sharpness || 0} var)`;
+  }
+
+  // Update Live Recognition Stream
+  const histEl = document.getElementById('liveRecHistory');
+  if (histEl && plateText && plateText !== '-- NO PLATE --') {
+    const timeStr = new Date().toLocaleTimeString();
+    const item = document.createElement('div');
+    item.style.display = 'flex';
+    item.style.justifyContent = 'space-between';
+    item.style.color = confidence >= 80 ? '#38bdf8' : (confidence >= 60 ? '#f59e0b' : '#ef4444');
+    item.innerHTML = `<span>${timeStr} <strong>${plateText}</strong></span><span>${confidence}% (${ocr.engine || 'AI'})</span>`;
+    if (histEl.children.length === 1 && histEl.children[0].innerText.includes('Awaiting')) {
+      histEl.innerHTML = '';
+    }
+    histEl.prepend(item);
+    if (histEl.children.length > 5) histEl.removeChild(histEl.lastChild);
+  }
+
   // Parking Action Details
   const action = json.parking_action;
   const statusBadge = document.getElementById('statusBadgeAction');
   const slotText = document.getElementById('assignedSlotText');
 
-  if (action && action.success) {
+  if (action && action.action === 'DUPLICATE_SUPPRESSED') {
+    statusBadge.className = 'badge badge-ev';
+    statusBadge.innerText = 'DUPLICATE SUPPRESSED';
+    slotText.innerText = 'ACTIVE IN BAY';
+    showToast(action.message, 'info');
+  } else if (action && action.action === 'CONFIRM_REQUIRED') {
+    statusBadge.className = 'badge badge-reserved';
+    statusBadge.innerText = 'CONFIRMATION REQUIRED';
+    slotText.innerText = 'OPERATOR CHECK';
+    showToast(`Plate ${plateText} detected with ${confidence}% confidence. Please verify.`, 'warning');
+  } else if (confidence < 60 || (action && action.action === 'REJECTED_UNCERTAIN')) {
+    statusBadge.className = 'badge badge-occupied';
+    statusBadge.innerText = 'PLATE RECOGNITION UNCERTAIN - PLEASE VERIFY';
+    slotText.innerText = 'UNCERTAIN';
+    showToast('PLATE RECOGNITION UNCERTAIN - PLEASE VERIFY', 'warning');
+  } else if (action && action.success) {
     if (action.action === 'ENTRY') {
       statusBadge.className = 'badge badge-available';
       statusBadge.innerText = 'ENTRY DETECTED';
@@ -484,17 +553,45 @@ async function captureAndProcessFrameSilent() {
       const latDisp = document.getElementById('latencyDisplay');
       if (latDisp) latDisp.innerText = `${latency} ms`;
 
-      // If plate detected and valid
-      if (json.success && json.ocr && json.ocr.cleaned_plate && json.ocr.cleaned_plate.length >= 5) {
-        const newPlate = json.ocr.cleaned_plate;
-        if (newPlate !== lastDetectedPlate) {
+      // Update crop preview and telemetry in real time
+      if (json.plate_crop_url) {
+        const cropImg = document.getElementById('plateCropImg');
+        const cropPlaceholder = document.getElementById('plateCropPlaceholder');
+        if (cropImg && cropPlaceholder) {
+          cropImg.src = json.plate_crop_url + '?t=' + Date.now();
+          cropImg.style.display = 'block';
+          cropPlaceholder.style.display = 'none';
+        }
+      }
+
+      const ocr = json.ocr || {};
+      const plateText = ocr.cleaned_plate || ocr.raw_text;
+      const confidence = Math.round((ocr.confidence || 0) * 100);
+
+      if (plateText) {
+        const pDisp = document.getElementById('detectedPlateDisplay');
+        if (pDisp) pDisp.innerText = plateText;
+        const rDisp = document.getElementById('rawOcrText');
+        if (rDisp) rDisp.innerText = ocr.raw_text || plateText;
+        const cDisp = document.getElementById('ocrConfidenceText');
+        if (cDisp) cDisp.innerText = `${confidence}%`;
+        const cBar = document.getElementById('confidenceBar');
+        if (cBar) cBar.style.width = `${confidence}%`;
+        const engDisp = document.getElementById('pipelineEngineText');
+        if (engDisp) engDisp.innerText = ocr.engine || 'AI Multi-Variant';
+      }
+
+      // If plate detected and valid (or confident >= 65%)
+      if (json.success && ocr && plateText && plateText.length >= 6) {
+        const newPlate = ocr.cleaned_plate || plateText;
+        if (newPlate !== lastDetectedPlate && (ocr.valid || confidence >= 65)) {
           lastDetectedPlate = newPlate;
-          autoScanPaused = true; // Pause to display ticket and allow vehicle through
+          autoScanPaused = true;
           handlePipelineResponse(json);
           setTimeout(() => {
             autoScanPaused = false;
             lastDetectedPlate = null;
-          }, 9000);
+          }, 4500);
         }
       }
     } catch (err) {

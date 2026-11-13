@@ -1,7 +1,7 @@
 import re
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 
-# Valid Indian State & Union Territory Codes (Including Telangana TG & TS)
+# Valid Indian State & Union Territory Codes (36 official states/UTs including Telangana TS & TG)
 INDIAN_STATES = {
     "AN", "AP", "AR", "AS", "BR", "CG", "CH", "DD", "DL", "DN", "GA", "GJ",
     "HP", "HR", "JH", "JK", "KA", "KL", "LA", "LD", "MH", "ML", "MN", "MP",
@@ -9,92 +9,247 @@ INDIAN_STATES = {
     "WB"
 }
 
-# Standard Indian License Plate Regex Patterns
-# 1. Standard: 2 letters, 2 digits, 1-3 letters, 4 digits (e.g., TN09AB1234, TG03A7349, DL4CAA1234)
-STD_PATTERN = re.compile(r"^([A-Z]{2})(\d{1,2})([A-Z]{0,3})(\d{4})$")
-# 2. Bharat Series: 2 digits (year), BH, 4 digits, 1-2 letters (e.g., 22BH1234AA)
-BH_PATTERN = re.compile(r"^(\d{2})(BH)(\d{4})([A-Z]{1,2})$")
-# 3. Flexible Fallback Pattern: alphanumeric 6 to 12 chars
-GENERIC_PATTERN = re.compile(r"^[A-Z0-9]{6,12}$")
-
-# OCR character confusion maps
+# OCR Visual Ambiguity Mappings
 DIGIT_TO_LETTER = {
-    '0': 'O', '1': 'I', '2': 'Z', '4': 'A', '5': 'S', '6': 'G', '7': 'T', '8': 'B'
-}
-LETTER_TO_DIGIT = {
-    'O': '0', 'I': '1', 'Z': '2', 'A': '4', 'S': '5', 'B': '8', 'G': '6', 'D': '0', 'Q': '0'
+    '0': 'O',
+    '1': 'I',
+    '2': 'Z',
+    '4': 'A',
+    '5': 'S',
+    '6': 'G',
+    '7': 'T',
+    '8': 'B'
 }
 
-# Common OCR confusion for Indian State Prefixes
-STATE_CONFUSIONS = {
-    'IG': 'TG', '1G': 'TG', 'IC': 'TG', 'TC': 'TG', 'TO': 'TG', '1C': 'TG', 'T6': 'TG', 'T5': 'TS', 'T9': 'TG',
-    'LG': 'TG', 'LC': 'TG', 'D1': 'DL', 'K4': 'KA', 'M1': 'MH', 'T1': 'TN', 'U1': 'UP', 'H1': 'HR', 'A1': 'AP'
+LETTER_TO_DIGIT = {
+    'O': '0',
+    'D': '0',
+    'Q': '0',
+    'I': '1',
+    'L': '1',
+    'Z': '2',
+    'A': '4',
+    'S': '5',
+    'G': '6',
+    'T': '7',
+    'B': '8'
+}
+
+# Common state prefix confusions
+STATE_PREFIX_CORRECTIONS = {
+    '1G': 'TG', 'IG': 'TG', 'TC': 'TG', 'TO': 'TG', 'T6': 'TG', 'T9': 'TG',
+    '1S': 'TS', 'T5': 'TS', 'IS': 'TS',
+    'D1': 'DL', 'DI': 'DL',
+    'K4': 'KA', 'KI': 'KL',
+    'M1': 'MH', 'MI': 'MH',
+    'T1': 'TN', 'TI': 'TN',
+    'U1': 'UP', 'UI': 'UP',
+    'H1': 'HR', 'HI': 'HR',
+    'A1': 'AP', 'AI': 'AP'
 }
 
 
 class PlateProcessor:
-    """Normalizes, cleans, and validates Indian license plate numbers with OCR error correction."""
+    """
+    Grammar-Guided Indian Vehicle Registration Plate Processor and Disambiguation Engine.
+    Resolves OCR visual confusions (0 vs O, 1 vs I, 8 vs B, 5 vs S, 2 vs Z, 6 vs G)
+    strictly using the grammatical positioning of Indian license plate syntax.
+    """
 
     @staticmethod
     def clean_raw_text(raw_text: str) -> str:
-        """Removes spaces, punctuation, special symbols, and converts to uppercase."""
+        """Removes spaces, hyphens, dots, special characters, and forces uppercase."""
         if not raw_text:
             return ""
-        # Remove anything except alphanumeric characters
+        # Strip common OCR noise like 'IND' on HSRP plates if attached at start
         cleaned = re.sub(r"[^A-Za-z0-9]", "", raw_text).upper()
+        if cleaned.startswith("IND") and len(cleaned) >= 11:
+            cleaned = cleaned[3:]
         return cleaned
 
     @classmethod
-    def correct_ocr_characters(cls, text: str) -> str:
+    def disambiguate_indian_plate(cls, text: str) -> Tuple[str, Dict[str, Any]]:
         """
-        Applies smart character heuristics based on positional Indian plate structure:
-        Positions 0-1: State Code (Letters)
-        Positions 2-3: RTO Code (Digits)
-        Positions 4 to (len-4): Series Code (Letters)
-        Last 4 positions: Registration Number (Digits)
+        Syntactically resolves character ambiguities in Indian plates.
+        Analyzes all possible grammatical segmentations:
+        - Format A: State (2 letters) + RTO (2 digits) + Series (1-3 letters) + Number (4 digits) -> e.g. TS09AB1234
+        - Format B: State (2 letters) + RTO (1 digit)  + Series (1-3 letters) + Number (4 digits) -> e.g. DL8CAF1234
+        - Format C: Bharat Series (2 digits) + BH + Number (4 digits) + Series (1-2 letters)     -> e.g. 22BH1234AA
+        - Format D: Vintage / Commercial (2 letters) + RTO (1-2 digits) + Number (4 digits)       -> e.g. MH011234
         """
-        if len(text) < 7:
-            return text
+        cleaned = cls.clean_raw_text(text)
+        if len(cleaned) < 6:
+            return cleaned, {"valid": False, "score": 0.20, "pattern": "too_short"}
 
-        chars = list(text)
-        n = len(chars)
+        candidates: List[Dict[str, Any]] = []
 
-        # 0. Check state prefix confusions (e.g. IC -> TG, TC -> TG)
-        if n >= 2:
-            st = chars[0] + chars[1]
-            if st in STATE_CONFUSIONS:
-                chars[0] = STATE_CONFUSIONS[st][0]
-                chars[1] = STATE_CONFUSIONS[st][1]
+        # Candidate 0: Raw cleaned text direct test
+        val_direct = cls._evaluate_candidate(cleaned, cleaned)
+        if val_direct["valid"]:
+            candidates.append(val_direct)
 
-        # 1. Check if first two are letters (State Code)
-        for i in range(min(2, n)):
-            if chars[i] in DIGIT_TO_LETTER:
-                chars[i] = DIGIT_TO_LETTER[chars[i]]
+        # Candidate 1: Standard Format with 2-digit RTO (e.g. TS 09 AB 1234)
+        # Lengths typically 9 to 11 characters
+        if len(cleaned) >= 8:
+            n = len(cleaned)
+            # Last 4 characters must be registration digits
+            num_part = cleaned[-4:]
+            num_corr = "".join(LETTER_TO_DIGIT.get(c, c) for c in num_part)
 
-        # 2. Check positions 2 and 3 (RTO Digits)
-        for i in range(2, min(4, n)):
-            if chars[i] in LETTER_TO_DIGIT:
-                chars[i] = LETTER_TO_DIGIT[chars[i]]
+            # First 2 characters must be State code letters
+            state_part = cleaned[:2]
+            state_cand = "".join(DIGIT_TO_LETTER.get(c, c) for c in state_part)
+            if state_cand in STATE_PREFIX_CORRECTIONS:
+                state_cand = STATE_PREFIX_CORRECTIONS[state_cand]
 
-        # 3. Check last 4 characters (Digits)
-        for i in range(max(4, n - 4), n):
-            if chars[i] in LETTER_TO_DIGIT:
-                chars[i] = LETTER_TO_DIGIT[chars[i]]
+            # RTO code (index 2 to 4: 2 digits)
+            rto_part = cleaned[2:4]
+            rto_corr = "".join(LETTER_TO_DIGIT.get(c, c) for c in rto_part)
 
-        # 4. Check intermediate series (Letters)
-        for i in range(4, max(4, n - 4)):
-            if chars[i] in DIGIT_TO_LETTER:
-                chars[i] = DIGIT_TO_LETTER[chars[i]]
+            # Middle series (index 4 to n-4: letters)
+            ser_part = cleaned[4:n-4]
+            ser_corr = "".join(DIGIT_TO_LETTER.get(c, c) for c in ser_part)
 
-        return "".join(chars)
+            cand_plate = f"{state_cand}{rto_corr}{ser_corr}{num_corr}"
+            ev = cls._evaluate_candidate(cand_plate, cleaned)
+            candidates.append(ev)
+
+        # Candidate 2: Single-Digit RTO Format (e.g. DL 8 CAF 1234)
+        if len(cleaned) >= 8:
+            n = len(cleaned)
+            num_part = cleaned[-4:]
+            num_corr = "".join(LETTER_TO_DIGIT.get(c, c) for c in num_part)
+
+            state_part = cleaned[:2]
+            state_cand = "".join(DIGIT_TO_LETTER.get(c, c) for c in state_part)
+            if state_cand in STATE_PREFIX_CORRECTIONS:
+                state_cand = STATE_PREFIX_CORRECTIONS[state_cand]
+
+            # Single digit RTO (index 2)
+            rto_digit = LETTER_TO_DIGIT.get(cleaned[2], cleaned[2])
+
+            # Series (index 3 to n-4: letters)
+            ser_part = cleaned[3:n-4]
+            ser_corr = "".join(DIGIT_TO_LETTER.get(c, c) for c in ser_part)
+
+            cand_plate = f"{state_cand}{rto_digit}{ser_corr}{num_corr}"
+            ev = cls._evaluate_candidate(cand_plate, cleaned)
+            candidates.append(ev)
+
+        # Candidate 3: Bharat Series (BH) Format (e.g. 22 BH 1234 AA)
+        if "BH" in cleaned or (len(cleaned) >= 9 and cleaned[2:4] in ("8H", "B#", "8#")):
+            try:
+                yr_part = "".join(LETTER_TO_DIGIT.get(c, c) for c in cleaned[:2])
+                num_part = "".join(LETTER_TO_DIGIT.get(c, c) for c in cleaned[4:8])
+                ser_part = "".join(DIGIT_TO_LETTER.get(c, c) for c in cleaned[8:])
+                bh_cand = f"{yr_part}BH{num_part}{ser_part}"
+                ev = cls._evaluate_candidate(bh_cand, cleaned)
+                candidates.append(ev)
+            except Exception:
+                pass
+
+        # Sort candidates by grammatical confidence score descending
+        if candidates:
+            candidates.sort(key=lambda c: c["score"], reverse=True)
+            best = candidates[0]
+            return best["plate"], best
+
+        return cleaned, {"valid": False, "score": 0.30, "pattern": "unmatched"}
+
+    @classmethod
+    def _evaluate_candidate(cls, candidate: str, original_raw: str) -> Dict[str, Any]:
+        """Validates and scores a candidate plate string against Indian statutory patterns."""
+        # Pattern 1: Standard Indian Plate (2 letters State, 1-2 digits RTO, 0-3 letters Series, 4 digits Number)
+        m_std = re.match(r"^([A-Z]{2})(\d{1,2})([A-Z]{0,3})(\d{4})$", candidate)
+        if m_std:
+            state, rto, series, number = m_std.groups()
+            is_valid_state = state in INDIAN_STATES
+            
+            # Base score: valid structure = 0.85; verified Indian state code = 0.98
+            score = 0.98 if is_valid_state else 0.82
+
+            # Small penalty if characters were modified from raw OCR (prevents over-correction)
+            diffs = sum(1 for a, b in zip(candidate, original_raw) if a != b) if len(candidate) == len(original_raw) else 1
+            score = max(0.60, score - (diffs * 0.02))
+
+            return {
+                "valid": is_valid_state,
+                "plate": candidate,
+                "score": round(score, 3),
+                "state_code": state,
+                "rto_code": rto.zfill(2),
+                "series": series,
+                "number": number,
+                "pattern": "Standard Indian ANPR",
+                "is_indian_format": True
+            }
+
+        # Pattern 2: Bharat Series
+        m_bh = re.match(r"^(\d{2})(BH)(\d{4})([A-Z]{1,2})$", candidate)
+        if m_bh:
+            year, bh, number, series = m_bh.groups()
+            return {
+                "valid": True,
+                "plate": candidate,
+                "score": 0.95,
+                "state_code": "BH",
+                "rto_code": year,
+                "series": series,
+                "number": number,
+                "pattern": "Bharat Series (BH)",
+                "is_indian_format": True
+            }
+
+        # Pattern 3: Old format / 3-digit number (e.g., DL1C123)
+        m_old = re.match(r"^([A-Z]{2})(\d{1,2})([A-Z]{0,2})(\d{3,4})$", candidate)
+        if m_old:
+            state, rto, series, number = m_old.groups()
+            is_valid_state = state in INDIAN_STATES
+            return {
+                "valid": is_valid_state,
+                "plate": candidate,
+                "score": 0.85 if is_valid_state else 0.65,
+                "state_code": state,
+                "rto_code": rto,
+                "series": series,
+                "number": number,
+                "pattern": "Old/Short Format",
+                "is_indian_format": True
+            }
+
+        # Generic Alphanumeric Fallback (6 to 12 chars)
+        if re.match(r"^[A-Z0-9]{6,12}$", candidate):
+            state_sub = candidate[:2]
+            is_valid_state = state_sub in INDIAN_STATES
+            return {
+                "valid": is_valid_state and len(candidate) >= 8,
+                "plate": candidate,
+                "score": 0.70 if is_valid_state else 0.45,
+                "state_code": state_sub if is_valid_state else None,
+                "rto_code": None,
+                "series": None,
+                "number": None,
+                "pattern": "Generic Alphanumeric",
+                "is_indian_format": is_valid_state
+            }
+
+        return {
+            "valid": False,
+            "plate": candidate,
+            "score": 0.20,
+            "state_code": None,
+            "rto_code": None,
+            "series": None,
+            "number": None,
+            "pattern": "Invalid",
+            "is_indian_format": False
+        }
 
     @classmethod
     def validate_and_format(cls, raw_text: str) -> Dict[str, Any]:
-        """
-        Validates the plate string, scores confidence, and returns formatted result.
-        """
-        cleaned = cls.clean_raw_text(raw_text)
-        if not cleaned:
+        """Public API returning full normalization, validation breakdown, and confidence score."""
+        cleaned_input = cls.clean_raw_text(raw_text)
+        if not cleaned_input:
             return {
                 "valid": False,
                 "raw_text": raw_text,
@@ -107,83 +262,17 @@ class PlateProcessor:
                 "is_indian_format": False
             }
 
-        # Check direct match on cleaned string first
-        candidate = cleaned
-        std_match = STD_PATTERN.match(candidate)
-        bh_match = BH_PATTERN.match(candidate)
-
-        # If not matching directly, try applying OCR character confusion corrections
-        if not std_match and not bh_match:
-            candidate = cls.correct_ocr_characters(cleaned)
-            std_match = STD_PATTERN.match(candidate)
-            bh_match = BH_PATTERN.match(candidate)
-
-        # Match against Standard Pattern
-        if std_match:
-            state, rto, series, number = std_match.groups()
-            is_valid_state = state in INDIAN_STATES
-            score = 0.95 if is_valid_state else 0.80
-
-            # Pad RTO code to 2 digits if single digit
-            rto_formatted = rto.zfill(2)
-            formatted_plate = f"{state}{rto_formatted}{series}{number}"
-
-            return {
-                "valid": True,
-                "raw_text": raw_text,
-                "cleaned_plate": formatted_plate,
-                "state_code": state,
-                "rto_code": rto_formatted,
-                "series": series,
-                "number": number,
-                "confidence_score": score,
-                "is_indian_format": True,
-                "is_valid_state": is_valid_state
-            }
-
-        # Match against BH Pattern
-        if bh_match:
-            year, bh, number, series = bh_match.groups()
-            return {
-                "valid": True,
-                "raw_text": raw_text,
-                "cleaned_plate": f"{year}{bh}{number}{series}",
-                "state_code": "BH",
-                "rto_code": year,
-                "series": series,
-                "number": number,
-                "confidence_score": 0.92,
-                "is_indian_format": True,
-                "is_valid_state": True
-            }
-
-        # Generic Alphanumeric Fallback
-        if GENERIC_PATTERN.match(candidate):
-            # Soft match for imperfect OCR
-            state_candidate = candidate[:2]
-            is_valid_state = state_candidate in INDIAN_STATES
-            return {
-                "valid": len(candidate) >= 6,
-                "raw_text": raw_text,
-                "cleaned_plate": candidate,
-                "state_code": state_candidate if is_valid_state else None,
-                "rto_code": None,
-                "series": None,
-                "number": None,
-                "confidence_score": 0.65 if is_valid_state else 0.50,
-                "is_indian_format": is_valid_state,
-                "is_valid_state": is_valid_state
-            }
+        resolved_plate, details = cls.disambiguate_indian_plate(cleaned_input)
 
         return {
-            "valid": False,
+            "valid": details.get("valid", False),
             "raw_text": raw_text,
-            "cleaned_plate": candidate,
-            "state_code": None,
-            "rto_code": None,
-            "series": None,
-            "number": None,
-            "confidence_score": 0.20,
-            "is_indian_format": False,
-            "is_valid_state": False
+            "cleaned_plate": resolved_plate,
+            "state_code": details.get("state_code"),
+            "rto_code": details.get("rto_code"),
+            "series": details.get("series"),
+            "number": details.get("number"),
+            "confidence_score": details.get("score", 0.0),
+            "is_indian_format": details.get("is_indian_format", False),
+            "pattern": details.get("pattern", "Unknown")
         }

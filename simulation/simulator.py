@@ -56,6 +56,9 @@ class ParkingSimulator:
         )
 
         # Run ANPR pipeline
+        from anpr.multi_frame_tracker import global_multi_frame_tracker
+        global_multi_frame_tracker.clear_track("ENTRY")
+
         pipeline_res = ANPRPipeline.process_frame(
             frame=frame,
             force_action="ENTRY",
@@ -112,6 +115,9 @@ class ParkingSimulator:
         )
 
         # Process exit
+        from anpr.multi_frame_tracker import global_multi_frame_tracker
+        global_multi_frame_tracker.clear_track("EXIT")
+
         pipeline_res = ANPRPipeline.process_frame(
             frame=frame,
             force_action="EXIT",
