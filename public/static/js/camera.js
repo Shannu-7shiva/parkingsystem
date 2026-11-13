@@ -324,6 +324,8 @@ function handlePipelineResponse(json) {
     return;
   }
 
+  const action = json.parking_action || {};
+
   // Update Latency
   const latDisp = document.getElementById('latencyDisplay');
   if (latDisp && json.latency_ms !== undefined) {
@@ -342,10 +344,10 @@ function handlePipelineResponse(json) {
   document.getElementById('detectedVehicleType').innerText = (json.vehicle_type || 'Car').toUpperCase() + (typeof getVehicleIcon === 'function' ? ' ' + getVehicleIcon(json.vehicle_type) : '');
   
   const ownerEl = document.getElementById('ownerNameText');
-  if (ownerEl) ownerEl.innerText = json.owner_name || (action && action.owner_name) || 'Visitor';
+  if (ownerEl) ownerEl.innerText = json.owner_name || action.owner_name || 'Visitor';
 
   const modelEl = document.getElementById('vehicleModelText');
-  if (modelEl) modelEl.innerText = json.vehicle_model || (action && action.vehicle_model) || 'Vehicle';
+  if (modelEl) modelEl.innerText = json.vehicle_model || action.vehicle_model || 'Vehicle';
 
   document.getElementById('pipelineEngineText').innerText = ocr.engine || 'YOLO + Heuristic OCR';
 
@@ -383,7 +385,6 @@ function handlePipelineResponse(json) {
   }
 
   // Parking Action Details
-  const action = json.parking_action;
   const statusBadge = document.getElementById('statusBadgeAction');
   const slotText = document.getElementById('assignedSlotText');
 

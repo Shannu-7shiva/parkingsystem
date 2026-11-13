@@ -159,7 +159,7 @@ class PlateDetector:
                 area = w * h
 
                 # Broad aspect range: 1.2 to 12.0 covers square, two-line, and standard wide plates
-                if 1.2 <= aspect <= 12.0 and (rw * rh * 0.003) <= area <= (rw * rh * 0.85) and h >= 14:
+                if 1.2 <= aspect <= 12.0 and (rw * rh * 0.003) <= area <= (rw * rh * 0.98) and h >= 14:
                     pad_w = int(w * 0.10)
                     pad_h = int(h * 0.25)
                     abs_x1 = max(0, offset_x + x - pad_w)
@@ -186,7 +186,7 @@ class PlateDetector:
             x, y, w, h = cv2.boundingRect(cnt)
             aspect = w / float(h) if h > 0 else 0
             area = w * h
-            if 1.3 <= aspect <= 9.0 and (rw * rh * 0.008) <= area <= (rw * rh * 0.80) and h >= 16:
+            if 1.3 <= aspect <= 9.0 and (rw * rh * 0.008) <= area <= (rw * rh * 0.98) and h >= 16:
                 pad_w = int(w * 0.08)
                 pad_h = int(h * 0.12)
                 abs_x1 = max(0, offset_x + x - pad_w)
@@ -203,30 +203,44 @@ class PlateDetector:
                         "method": "Luminance Rectangular"
                     })
 
+        # Strategy 3: If ROI itself already has plate aspect ratio and text height (e.g. tightly cropped phone or plate presentation)
+        roi_aspect = rw / float(rh) if rh > 0 else 0
+        if 1.3 <= roi_aspect <= 6.5 and 24 <= rh <= 320:
+            candidates.append({
+                "bbox": (offset_x, offset_y, offset_x + rw, offset_y + rh),
+                "crop": full_frame[offset_y:offset_y+rh, offset_x:offset_x+rw],
+                "confidence": 0.90,
+                "method": "ROI Direct Plate"
+            })
+
         # Return best candidate
         if candidates:
-            # Prefer candidates closest to standard plate aspect ratios (2.5 - 5.5) and significant area
             def score_candidate(c):
                 bx1, by1, bx2, by2 = c["bbox"]
                 bw = bx2 - bx1
                 bh = by2 - by1
                 ar = bw / float(bh) if bh > 0 else 1.0
-                aspect_fit = 1.0 - min(1.0, abs(ar - 4.0) / 4.0)
+                aspect_fit = 1.0 - min(1.0, abs(ar - 3.8) / 3.8)
                 area_ratio = (bw * bh) / float(rw * rh)
-                return aspect_fit * 0.6 + min(area_ratio * 3.0, 0.4)
+                return aspect_fit * 0.6 + min(area_ratio * 2.0, 0.4)
 
             candidates.sort(key=score_candidate, reverse=True)
             return candidates[:1]
 
         # Geometric default:
-        # If inside a vehicle box: lower center of vehicle ROI typically holds the plate.
+        # If inside a vehicle box that is already plate-shaped: use full ROI!
+        # If tall vehicle box: lower center of vehicle ROI typically holds the plate.
         # If no vehicle detected (user holding plate directly to webcam): CENTER of frame!
         if offset_x == 0 and offset_y == 0 and rw == fw and rh == fh:
-            # User holding plate in front of camera / viewfinder zone
             def_w = int(rw * 0.70)
             def_h = int(rh * 0.45)
             def_x = int((rw - def_w) / 2)
             def_y = int((rh - def_h) / 2)
+        elif 1.3 <= (rw / float(rh)) <= 6.5 and rh <= 320:
+            def_w = rw
+            def_h = rh
+            def_x = offset_x
+            def_y = offset_y
         else:
             def_w = int(rw * 0.55)
             def_h = int(rh * 0.25)

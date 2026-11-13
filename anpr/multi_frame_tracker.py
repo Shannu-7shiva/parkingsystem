@@ -40,6 +40,13 @@ class MultiFrameTracker:
 
         cleaned = PlateProcessor.clean_raw_text(plate_text)
         if len(cleaned) >= 5:
+            # If incoming plate belongs to a completely different vehicle (different State code or >=3 character divergence), reset track
+            if track:
+                prev_p = track[-1]["cleaned_plate"]
+                diff_count = sum(1 for a, b in zip(cleaned, prev_p) if a != b) if len(cleaned) == len(prev_p) else abs(len(cleaned) - len(prev_p))
+                if cleaned[:2] != prev_p[:2] or diff_count >= 3:
+                    track.clear()
+
             # Check for duplicate consecutive readings in under 150ms to ensure frame diversity
             is_redundant = False
             if track and (now - track[-1]["timestamp"]) < 0.15:

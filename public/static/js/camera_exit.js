@@ -443,7 +443,7 @@ function exitHandlePipelineResponse(json) {
   if (!json) return;
 
   // Handle simulated exit response (direct from /api/simulate-exit or pipeline)
-  const action = json.parking_action || (json.action ? json : null);
+  const action = json.parking_action || (json.action ? json : null) || {};
 
   // Latency
   const latEl = document.getElementById('exitLatencyDisplay');

@@ -130,8 +130,9 @@ class OCREngine:
                 "processing_time_ms": 0.0
             }
 
-        # 1. Fast Cache Check
-        cache_key = hashlib.md5(plate_crop.tobytes()[:2048]).hexdigest()
+        # 1. Fast Cache Check: Hash downsampled thumbnail representing the entire crop layout
+        thumb = cv2.resize(plate_crop, (64, 24), interpolation=cv2.INTER_AREA)
+        cache_key = hashlib.md5(thumb.tobytes()).hexdigest()
         if cache_key in _ocr_cache:
             cached = dict(_ocr_cache[cache_key])
             cached["cached"] = True
